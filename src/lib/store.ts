@@ -1,4 +1,5 @@
 import { Store, useStore } from "@tanstack/react-store";
+import { api } from "./api";
 import {
   aiRules as seedRules,
   knowledgeDocs,
@@ -265,6 +266,7 @@ export function takeOver(conversationId: string, staffName: string) {
   });
   pushActivity({ kind: "escalation", text: `${staffName} took over a conversation`, meta: "Dashboard" });
   toast("You are handling this conversation", "ai", "The AI has paused automatic replies");
+  api.toggleTakeover(conversationId, "human-takeover");
 }
 
 export function returnToAi(conversationId: string) {
@@ -278,6 +280,7 @@ export function returnToAi(conversationId: string) {
     body: "Handed back to the AI. Automatic replies resumed for this guest.",
   });
   toast("Returned to the AI", "ai", "Automatic replies resumed");
+  api.toggleTakeover(conversationId, "ai-handling");
 }
 
 export function sendReply(conversationId: string, body: string, as: "ai" | "staff", staffName?: string) {
@@ -313,6 +316,7 @@ export function sendReply(conversationId: string, body: string, as: "ai" | "staf
     meta: channelLabel(conversation.primaryChannel),
   });
   toast(as === "ai" ? "AI reply approved and sent" : "Reply sent", "good", `${conversation.guest.name} · ${channelLabel(conversation.primaryChannel)}`);
+  api.sendReply(conversationId, body, staffName, conversation.primaryChannel);
 }
 
 export function addNote(conversationId: string, body: string, staffName: string) {
@@ -435,6 +439,7 @@ export function createTask(input: {
     meta: input.assignee ? `Sent to ${input.assignee} on WhatsApp` : "Unassigned",
   });
   toast("Task created", "good", `${input.department}${input.assignee ? ` · ${input.assignee}` : ""}`);
+  api.createTask(input);
   return id;
 }
 
@@ -458,6 +463,7 @@ export function setTaskStatus(taskId: string, status: TaskStatus, note?: string)
         : t,
     ),
   }));
+  api.updateTaskStatus(taskId, status, note, "dashboard");
   if (status === "Completed") {
     pushActivity({ kind: "task", text: `Completed — ${task.title}${task.room ? ` (${task.room})` : ""}`, meta: task.department });
     if (task.conversationId) {
@@ -490,6 +496,7 @@ export function assignTask(taskId: string, assignee: string) {
         : t,
     ),
   }));
+  api.updateTaskStatus(taskId, "Assigned", `Assigned to ${assignee}`, "whatsapp");
   toast(`Sent to ${assignee}`, "good", "Delivered as a WhatsApp task card");
 }
 
@@ -509,6 +516,7 @@ export function setRoomStatus(roomNumber: string, status: RoomStatus, via: "dash
   set((s) => ({
     rooms: s.rooms.map((r) => (r.number === roomNumber ? { ...r, status, updatedAt: clockNow() } : r)),
   }));
+  api.updateRoomStatus(roomNumber, status);
   pushActivity({
     kind: "room",
     text: `Room ${roomNumber} is now ${status}`,
@@ -582,6 +590,7 @@ export function createIssue(input: {
   };
   set((s) => ({ issues: [issue, ...s.issues] }));
   pushActivity({ kind: "maintenance", text: `${id} opened — ${input.title} (${input.room})`, meta: input.via });
+  api.createIssue(input);
   return id;
 }
 
@@ -600,6 +609,7 @@ export function setIssueStatus(issueId: string, status: Issue["status"], note?: 
         : i,
     ),
   }));
+  api.updateIssueStatus(issueId, status, note, "dashboard");
 
   if (status === "Completed") {
     const roomExists = store.state.rooms.some((r) => r.number === issue.room);
@@ -694,6 +704,7 @@ export function waChoose(threadId: string, messageId: string, label: string) {
   }));
 
   const room = roomFromBody(message.body);
+  api.sendWaAction({ threadId, messageId, label, room });
 
   /* housekeeping ---------------------------------------------------------- */
   if (thread.department === "Housekeeping") {
@@ -1124,3 +1135,42 @@ export const selectors = {
   acceptedUpsellTotal: (s: AppState) =>
     s.upsells.filter((u) => u.status === "Accepted").reduce((sum, u) => sum + u.value, 0),
 };
+
+export async function initBackendSync() {
+  try {
+    const [rooms, tasks, issues, convs, upsells, activities] = await Promise.all([
+      api.getRooms(),
+      api.getTasks(),
+      api.getIssues(),
+      api.getConversations(),
+      api.getUpsells(),
+      api.getActivity(),
+    ]);
+
+    if (rooms && rooms.length > 0) {
+      set(() => ({ rooms }));
+    }
+    if (tasks && tasks.length > 0) {
+      set(() => ({ tasks }));
+    }
+    if (issues && issues.length > 0) {
+      set(() => ({ issues }));
+    }
+    if (convs && convs.length > 0) {
+      set(() => ({ conversations: convs }));
+    }
+    if (upsells && upsells.length > 0) {
+      set(() => ({ upsells }));
+    }
+    if (activities && activities.length > 0) {
+      set(() => ({ activity: activities }));
+    }
+  } catch (err) {
+    console.warn("Backend sync skipped (fallback to seed data)", err);
+  }
+}
+
+if (typeof window !== "undefined") {
+  initBackendSync();
+}
+

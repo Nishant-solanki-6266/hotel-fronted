@@ -28,8 +28,24 @@ export const Route = createRootRoute({
       },
     ],
   }),
+  notFoundComponent: NotFound,
   shellComponent: RootDocument,
 });
+
+function NotFound() {
+  return (
+    <div className="grain flex min-h-dvh flex-col items-center justify-center gap-3 bg-paper px-4 text-center">
+      <h1 className="font-display text-[22px] font-medium text-ink">Page not found</h1>
+      <p className="text-[13px] text-ink-3">The page you were looking for doesn't exist.</p>
+      <a
+        href="/"
+        className="mt-2 rounded-[9px] border border-line bg-surface px-3 py-1.5 text-[13px] font-medium text-ink transition-colors hover:bg-paper"
+      >
+        Go to dashboard
+      </a>
+    </div>
+  );
+}
 
 function RootDocument() {
   useEffect(() => {

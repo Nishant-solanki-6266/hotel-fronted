@@ -96,4 +96,27 @@ export const api = {
   getAiRules: () => request<any[]>('/manager/rules'),
   getKnowledge: () => request<any[]>('/manager/knowledge'),
   getHealth: () => request<any>('/health'),
+
+  // Onboarding & Setup
+  getOnboarding: () => request<any>('/onboarding/status'),
+  getHotelProfile: () => request<any>('/onboarding/profile'),
+  saveHotelProfile: (profileData: any) =>
+    request('/onboarding/profile', {
+      method: 'POST',
+      body: JSON.stringify(profileData),
+    }),
+  saveTopology: (topology: string) =>
+    request('/onboarding/topology', {
+      method: 'POST',
+      body: JSON.stringify({ topology }),
+    }),
+  saveOnboardingStep: (stepKey: string, data?: any) =>
+    request('/onboarding/step', {
+      method: 'POST',
+      body: JSON.stringify({ stepKey, data }),
+    }),
+  completeOnboarding: () =>
+    request('/onboarding/complete', {
+      method: 'POST',
+    }),
 };

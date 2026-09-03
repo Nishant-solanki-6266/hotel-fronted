@@ -96,4 +96,27 @@ export const api = {
   getAiRules: () => request<any[]>('/manager/rules'),
   getKnowledge: () => request<any[]>('/manager/knowledge'),
   getHealth: () => request<any>('/health'),
+
+  // PMS Integration
+  connectPms: (provider: string, propertyId: string) =>
+    request<any>('/pms/connect', {
+      method: 'POST',
+      body: JSON.stringify({ provider, propertyId }),
+    }),
+  getPmsStatus: () => request<any>('/pms/status'),
+  syncPms: () => request<any>('/pms/sync', { method: 'POST' }),
+
+  // Guests & Reservations
+  getGuests: () => request<any[]>('/guests'),
+  getGuestById: (id: string) => request<any>(`/guests/${id}`),
+  getReservations: () => request<any[]>('/reservations'),
+  getReservationByNumber: (number: string) => request<any>(`/reservations/${number}`),
+
+  // Server-side Onboarding State
+  getOnboardingStatus: () => request<any>('/onboarding/status'),
+  updateOnboardingStatus: (data: any) =>
+    request<any>('/onboarding/status', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };

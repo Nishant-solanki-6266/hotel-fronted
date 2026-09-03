@@ -938,23 +938,76 @@ export function setWaTopology(waTopology: WaTopology) {
   }));
 }
 
-export function connectPms(provider: string, propertyId: string) {
+export async function connectPms(provider: string, propertyId: string) {
   set((s) => ({
     onboarding: {
       ...s.onboarding,
       pms: {
-        state: "connected",
+        ...s.onboarding.pms,
+        state: "in-progress",
         provider,
         propertyId,
-        propertyName: s.hotelProfile.name,
-        lastSync: "just now",
         error: null,
       },
-      done: { ...s.onboarding.done, pms: true },
     },
-    integrations: { ...s.integrations, pms: { provider, connected: true, lastSync: "just now" } },
   }));
-  toast(`${provider} connected`, "good", "Read-only — availability, rates and arrivals");
+
+  const res = await api.connectPms(provider, propertyId);
+
+  if (res && (res.success || res.status === "connected")) {
+    const data = res.data || res;
+    set((s) => ({
+      onboarding: {
+        ...s.onboarding,
+        pms: {
+          state: "connected",
+          provider: data.provider || provider,
+          propertyId: data.propertyId || propertyId,
+          propertyName: data.propertyName || s.hotelProfile.name,
+          lastSync: "just now",
+          error: null,
+        },
+        done: { ...s.onboarding.done, pms: true },
+      },
+      integrations: { ...s.integrations, pms: { provider: data.provider || provider, connected: true, lastSync: "just now" } },
+    }));
+    toast(`${provider} connected`, "good", "Read-only — availability, rates and arrivals");
+    // Trigger initial data sync after connection
+    syncPmsData().catch(() => {});
+    return true;
+  } else {
+    const errMessage = res?.message || "Failed to connect to Mews API. Check MEWS_CLIENT_TOKEN and Property ID.";
+    set((s) => ({
+      onboarding: {
+        ...s.onboarding,
+        pms: {
+          ...s.onboarding.pms,
+          state: "error",
+          error: errMessage,
+        },
+      },
+    }));
+    toast("Connection failed", "urgent", errMessage);
+    return false;
+  }
+}
+
+export async function syncPmsData() {
+  toast("Synchronizing PMS data", "good", "Fetching guests, reservations & rooms from Mews");
+  const res = await api.syncPms();
+  if (res && (res.success || res.synced)) {
+    const counts = res.data?.synced || res.synced || {};
+    const rooms = await api.getRooms();
+    if (rooms && Array.isArray(rooms) && rooms.length > 0) {
+      set((s) => ({ rooms }));
+    }
+    toast("PMS sync complete", "good", `${counts.guests || 0} guests, ${counts.reservations || 0} reservations, ${counts.rooms || 0} rooms`);
+    return true;
+  } else {
+    const err = res?.message || "PMS synchronization failed";
+    toast("Sync failed", "urgent", err);
+    return false;
+  }
 }
 
 /**

@@ -97,29 +97,6 @@ export const api = {
   getKnowledge: () => request<any[]>('/manager/knowledge'),
   getHealth: () => request<any>('/health'),
 
-<<<<<<< HEAD
-  // PMS Integration
-  connectPms: (provider: string, propertyId: string) =>
-    request<any>('/pms/connect', {
-      method: 'POST',
-      body: JSON.stringify({ provider, propertyId }),
-    }),
-  getPmsStatus: () => request<any>('/pms/status'),
-  syncPms: () => request<any>('/pms/sync', { method: 'POST' }),
-
-  // Guests & Reservations
-  getGuests: () => request<any[]>('/guests'),
-  getGuestById: (id: string) => request<any>(`/guests/${id}`),
-  getReservations: () => request<any[]>('/reservations'),
-  getReservationByNumber: (number: string) => request<any>(`/reservations/${number}`),
-
-  // Server-side Onboarding State
-  getOnboardingStatus: () => request<any>('/onboarding/status'),
-  updateOnboardingStatus: (data: any) =>
-    request<any>('/onboarding/status', {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-=======
   // Onboarding & Setup
   getOnboarding: () => request<any>('/onboarding/status'),
   getHotelProfile: () => request<any>('/onboarding/profile'),
@@ -141,6 +118,5 @@ export const api = {
   completeOnboarding: () =>
     request('/onboarding/complete', {
       method: 'POST',
->>>>>>> f2448f6a679fb58f4ad642378b61aa77d55ae634
     }),
 };

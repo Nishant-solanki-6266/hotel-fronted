@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { BookOpen, FileText, Plus, Trash2, Upload } from "lucide-react";
-import { addKnowledgeDoc, removeKnowledgeDoc, useApp } from "@/lib/store";
+import { useState, useRef } from "react";
+import { BookOpen, FileText, Plus, Trash2, Upload, Loader2 } from "lucide-react";
+import { addKnowledgeDoc, uploadKnowledgeDoc, removeKnowledgeDoc, useApp } from "@/lib/store";
 import type { KnowledgeDoc } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, Eyebrow, Empty, SectionTitle, statusTone } from "./ui";
@@ -20,11 +20,38 @@ const suggestions: { name: string; category: KnowledgeDoc["category"] }[] = [
 
 export function OnboardingKnowledgeStep() {
   const knowledge = useApp((s) => s.knowledge);
-  const [name, setName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState<KnowledgeDoc["category"]>("Hotel Policies");
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const ready = knowledge.filter((k) => k.aiReady).length;
+  const ready = knowledge.filter((k) => k.aiReady || k.status === "Indexed").length;
   const remaining = suggestions.filter((s) => !knowledge.some((k) => k.name === s.name));
+
+  const handleFile = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      await uploadKnowledgeDoc(file, category);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      setSelectedFile(file);
+      handleFile(file);
+    }
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_300px] lg:items-start">
@@ -34,21 +61,44 @@ export function OnboardingKnowledgeStep() {
           hint="Upload what you already send guests — policies, facilities, recommendations, prices"
         />
 
-        <div className="rounded-[10px] border border-dashed border-line bg-paper/50 p-4 text-center">
-          <Upload className="mx-auto size-5 text-ink-4" />
-          <p className="mt-2 text-[13px] font-medium text-ink-2">Drop files here</p>
-          <p className="mt-0.5 text-[11.5px] text-ink-4">PDF, DOCX, TXT or CSV · indexed in about a minute</p>
-          <div className="mx-auto mt-3 flex max-w-md flex-wrap items-end gap-2">
-            <label className="min-w-[160px] flex-1 text-left">
-              <span className="text-[11.5px] font-medium text-ink-3">File name</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Hotel Policy — Pets.pdf"
-                className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[12.5px] outline-none focus:border-pine-400"
-              />
-            </label>
-            <label className="text-left">
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={cn(
+            "rounded-[10px] border border-dashed p-4 text-center transition-colors cursor-pointer",
+            isDragging ? "border-pine-400 bg-pine-50/20" : "border-line bg-paper/50 hover:bg-paper/80"
+          )}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,.txt,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                const file = e.target.files[0];
+                setSelectedFile(file);
+                handleFile(file);
+              }
+            }}
+          />
+
+          <Upload className={cn("mx-auto size-5 transition-colors", isDragging ? "text-pine-600" : "text-ink-4")} />
+          <p className="mt-2 text-[13px] font-medium text-ink-2">
+            {selectedFile ? selectedFile.name : "Drop files here or click to browse"}
+          </p>
+          <p className="mt-0.5 text-[11.5px] text-ink-4">PDF, DOCX, TXT or CSV (up to 10 MB) · indexed in about a minute</p>
+
+          <div
+            className="mx-auto mt-3 flex max-w-md flex-wrap items-end gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <label className="text-left flex-1 min-w-[140px]">
               <span className="text-[11.5px] font-medium text-ink-3">Category</span>
               <select
                 value={category}
@@ -62,15 +112,13 @@ export function OnboardingKnowledgeStep() {
                 ))}
               </select>
             </label>
+
             <Button
-              icon={Plus}
-              disabled={name.trim().length < 4}
-              onClick={() => {
-                addKnowledgeDoc(name.trim(), category);
-                setName("");
-              }}
+              icon={isUploading ? Loader2 : Plus}
+              disabled={isUploading}
+              onClick={() => fileInputRef.current?.click()}
             >
-              Add
+              {isUploading ? "Uploading..." : "Select & Upload"}
             </Button>
           </div>
         </div>

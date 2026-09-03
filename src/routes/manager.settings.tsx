@@ -16,7 +16,6 @@ import {
   MessageCircle,
   Pencil,
   Plug,
-  Plus,
   RefreshCw,
   Server,
   Shield,
@@ -40,10 +39,11 @@ import {
   SectionTitle,
   statusTone,
 } from "@/components/ui";
-import { invoices, planTiers, staff } from "@/lib/data";
+import { planTiers } from "@/lib/data";
 import { roleLabel } from "@/lib/session";
 import {
-  addKnowledgeDoc,
+  deleteStaffUser,
+  inviteStaffUser,
   removeKnowledgeDoc,
   setAiMode,
   setAiRule,
@@ -54,6 +54,8 @@ import {
   toast,
   toggleWhatsApp,
   updateHotelProfile,
+  updateStaffRole,
+  uploadKnowledgeDoc,
   useApp,
 } from "@/lib/store";
 import type { AiRule, HotelProfile, KnowledgeDoc, Role } from "@/lib/types";
@@ -355,9 +357,23 @@ const roleAccess: Record<Role, string> = {
 };
 
 function UsersPanel() {
+  const users = useApp((s) => s.users);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("front-office");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+
+  const handleInvite = async () => {
+    if (!email.includes("@")) return;
+    setIsSubmitting(true);
+    const success = await inviteStaffUser({ email, role });
+    setIsSubmitting(false);
+    if (success) {
+      setEmail("");
+      setInviteOpen(false);
+    }
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -403,14 +419,10 @@ function UsersPanel() {
             <div className="flex gap-2">
               <Button
                 size="sm"
-                disabled={!email.includes("@")}
-                onClick={() => {
-                  toast("Invitation sent", "good", `${email} · ${roleLabel[role]}`);
-                  setEmail("");
-                  setInviteOpen(false);
-                }}
+                disabled={!email.includes("@") || isSubmitting}
+                onClick={handleInvite}
               >
-                Send invitation
+                {isSubmitting ? "Sending..." : "Send invitation"}
               </Button>
               <Button size="sm" variant="quiet" onClick={() => setInviteOpen(false)}>
                 Cancel
@@ -420,7 +432,7 @@ function UsersPanel() {
         )}
 
         <ul>
-          {staff.map((u) => (
+          {users.map((u) => (
             <li key={u.id} className="flex flex-wrap items-center gap-3 border-b border-line-soft px-4 py-3 last:border-b-0">
               <Avatar initials={u.initials} />
               <div className="min-w-0 flex-1">
@@ -431,15 +443,49 @@ function UsersPanel() {
                 <p className="text-[12px] text-ink-2">{u.title}</p>
                 <p className="text-[11px] text-ink-4">active {u.lastActive}</p>
               </div>
-              <Badge tone={u.role === "manager" ? "pine" : "mute"}>{roleLabel[u.role]}</Badge>
+              {editingUserId === u.id ? (
+                <div className="flex items-center gap-1.5">
+                  <select
+                    defaultValue={u.role}
+                    onChange={async (e) => {
+                      await updateStaffRole(u.id, e.target.value as Role);
+                      setEditingUserId(null);
+                    }}
+                    className="rounded-[6px] border border-pine-400 bg-surface px-2 py-1 text-[12px] outline-none"
+                  >
+                    {(Object.keys(roleLabel) as Role[]).map((r) => (
+                      <option key={r} value={r}>
+                        {roleLabel[r]}
+                      </option>
+                    ))}
+                  </select>
+                  <Button size="sm" variant="quiet" onClick={() => setEditingUserId(null)}>
+                    Done
+                  </Button>
+                </div>
+              ) : (
+                <Badge tone={u.role === "manager" ? "pine" : "mute"}>{roleLabel[u.role]}</Badge>
+              )}
               {u.whatsapp && (
                 <Badge tone="good">
                   <MessageCircle className="size-3" /> WhatsApp
                 </Badge>
               )}
-              <Button size="sm" variant="ghost" onClick={() => toast("Role editing", "ai", `${u.name} · manager-only action`)}>
-                Change role
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditingUserId(editingUserId === u.id ? null : u.id)}
+              >
+                {editingUserId === u.id ? "Done" : "Change role"}
               </Button>
+              {u.role !== "manager" && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon={Trash2}
+                  onClick={() => deleteStaffUser(u.id)}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -481,7 +527,6 @@ const formatIcon: Record<KnowledgeDoc["format"], React.ComponentType<{ className
 function KnowledgePanel() {
   const knowledge = useApp((s) => s.knowledge);
   const [category, setCategory] = useState<KnowledgeDoc["category"] | "All">("All");
-  const [uploadName, setUploadName] = useState("");
   const [uploadCategory, setUploadCategory] = useState<KnowledgeDoc["category"]>("Hotel Policies");
   const list = category === "All" ? knowledge : knowledge.filter((k) => k.category === category);
   const ready = knowledge.filter((k) => k.aiReady).length;
@@ -560,12 +605,6 @@ function KnowledgePanel() {
         <Card>
           <SectionTitle title="Add a source" hint="PDF, Word, text or CSV" />
           <div className="space-y-2.5">
-            <input
-              value={uploadName}
-              onChange={(e) => setUploadName(e.target.value)}
-              placeholder="Spa Treatment Menu.pdf"
-              className="w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] outline-none focus:border-pine-400"
-            />
             <select
               value={uploadCategory}
               onChange={(e) => setUploadCategory(e.target.value as KnowledgeDoc["category"])}
@@ -575,22 +614,23 @@ function KnowledgePanel() {
                 <option key={c}>{c}</option>
               ))}
             </select>
-            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-[10px] border border-dashed border-line bg-paper/60 px-4 py-5 text-center">
+            <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-[10px] border border-dashed border-line bg-paper/60 px-4 py-5 text-center hover:border-pine-400 transition-colors">
               <Upload className="size-4 text-ink-4" />
-              <span className="text-[12px] font-medium text-ink-2">Drop a file here</span>
-              <span className="text-[11px] text-ink-4">or type a name above to simulate an upload</span>
+              <span className="text-[12px] font-medium text-ink-2">Select or drop a file</span>
+              <span className="text-[11px] text-ink-4">PDF, DOCX, TXT or CSV (up to 10 MB)</span>
+              <input
+                type="file"
+                accept=".pdf,.docx,.doc,.txt,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    uploadKnowledgeDoc(file, uploadCategory);
+                    e.target.value = "";
+                  }
+                }}
+              />
             </label>
-            <Button
-              className="w-full"
-              icon={Plus}
-              disabled={!uploadName.trim()}
-              onClick={() => {
-                addKnowledgeDoc(uploadName.trim(), uploadCategory);
-                setUploadName("");
-              }}
-            >
-              Upload and index
-            </Button>
           </div>
         </Card>
 
@@ -864,6 +904,7 @@ function planPrice(pricePerRoom: number, rooms: number, cycle: "monthly" | "year
 
 function BillingPanel() {
   const subscription = useApp((s) => s.subscription);
+  const invoices = useApp((s) => s.invoices);
   const profile = useApp((s) => s.hotelProfile);
   const knowledge = useApp((s) => s.knowledge);
 

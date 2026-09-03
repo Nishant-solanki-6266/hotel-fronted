@@ -3,10 +3,19 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
   try {
     const url = `${API_BASE_URL}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      ...options.headers,
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+    const headers: Record<string, string> = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...((options.headers as Record<string, string>) || {}),
     };
+
+    // If token is stored in localStorage or default dev token is needed
+    if (typeof localStorage !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token && !headers['Authorization']) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+    }
 
     const res = await fetch(url, {
       ...options,
@@ -93,8 +102,29 @@ export const api = {
   // Manager & Health
   getBriefing: () => request<any>('/manager/briefing'),
   getActivity: () => request<any[]>('/manager/activity'),
-  getAiRules: () => request<any[]>('/manager/rules'),
-  getKnowledge: () => request<any[]>('/manager/knowledge'),
+  getAiRules: () => request<any>('/manager/rules'),
+  saveAiRules: (data: { aiMode?: string; rules?: Array<{ topic: string; mode: string; note?: string }> }) =>
+    request<any>('/manager/rules', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getKnowledge: () => request<any[]>('/knowledge'),
+  getKnowledgeDocs: () => request<any[]>('/knowledge'),
+  uploadKnowledgeDoc: (file: File, category?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (category) {
+      formData.append('category', category);
+    }
+    return request<any>('/knowledge', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  deleteKnowledgeDoc: (id: string) =>
+    request<any>(`/knowledge/${id}`, {
+      method: 'DELETE',
+    }),
   getHealth: () => request<any>('/health'),
 
   // Onboarding & Setup
@@ -119,4 +149,30 @@ export const api = {
     request('/onboarding/complete', {
       method: 'POST',
     }),
+  // Users & Staff
+  getUsers: () => request<any[]>('/users'),
+  inviteUser: (data: { email: string; role: string; name?: string; title?: string; phone?: string; whatsapp?: boolean }) =>
+    request<any>('/users/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateUserRole: (id: string, role: string) =>
+    request<any>(`/users/${id}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    }),
+  deleteUser: (id: string) =>
+    request<any>(`/users/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Billing & Subscriptions
+  getSubscription: () => request<any>('/billing/subscription'),
+  updateSubscription: (data: { plan?: string; billingCycle?: string; rooms?: number }) =>
+    request<any>('/billing/subscription', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getInvoices: () => request<any[]>('/billing/invoices'),
 };
+

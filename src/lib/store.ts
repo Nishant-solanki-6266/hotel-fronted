@@ -12,6 +12,8 @@ import {
   seedWaThreads,
   hotel,
   planTiers,
+  staff as seedStaff,
+  invoices as seedInvoices,
   subscription as seedSubscription,
 } from "./data";
 import type {
@@ -23,6 +25,7 @@ import type {
   EmailMethod,
   EmailServerSettings,
   HotelProfile,
+  Invoice,
   Issue,
   KnowledgeDoc,
   Message,
@@ -33,6 +36,7 @@ import type {
   Role,
   Room,
   RoomStatus,
+  StaffUser,
   Subscription,
   Task,
   TaskSource,
@@ -59,7 +63,9 @@ type AppState = {
   aiRules: AiRule[];
   knowledge: KnowledgeDoc[];
   hotelProfile: HotelProfile;
+  users: StaffUser[];
   subscription: Subscription;
+  invoices: Invoice[];
   onboarding: OnboardingState;
   aiMode: "Autonomous" | "Approval Required" | "Suggestions Only";
   integrations: {
@@ -197,7 +203,9 @@ export const store = new Store<AppState>({
   aiRules: seedRules,
   knowledge: knowledgeDocs,
   hotelProfile: hotel,
+  users: seedStaff,
   subscription: seedSubscription,
+  invoices: seedInvoices,
   onboarding: connectedOnboarding(),
   aiMode: "Autonomous",
   integrations: {
@@ -842,11 +850,17 @@ export function waChoose(threadId: string, messageId: string, label: string) {
 export function setAiMode(mode: AppState["aiMode"]) {
   set(() => ({ aiMode: mode }));
   toast(`AI mode set to ${mode}`, "ai");
+  api.saveAiRules({ aiMode: mode }).catch((err) => {
+    console.warn("Failed to persist AI mode to server:", err);
+  });
 }
 
 export function setAiRule(topic: string, mode: AiRule["mode"]) {
   set((s) => ({ aiRules: s.aiRules.map((r) => (r.topic === topic ? { ...r, mode } : r)) }));
   toast(`${topic} — ${mode}`, "ai");
+  api.saveAiRules({ rules: [{ topic, mode }] }).catch((err) => {
+    console.warn("Failed to persist AI rule to server:", err);
+  });
 }
 
 export function setEmailProvider(provider: "google" | "microsoft" | "other", account: string) {
@@ -873,8 +887,51 @@ export function updateHotelProfile(patch: Partial<HotelProfile>) {
   toast("Hotel profile saved", "good", "The AI uses these details when it answers guests");
 }
 
+export async function inviteStaffUser(data: { email: string; role: Role; name?: string; title?: string; phone?: string; whatsapp?: boolean }) {
+  const res = await api.inviteUser(data);
+  if (res) {
+    set((s) => ({
+      users: [...s.users.filter((u) => u.email !== res.email), res],
+      onboarding: {
+        ...s.onboarding,
+        invites: [...s.onboarding.invites, { email: res.email, role: data.role }],
+        done: { ...s.onboarding.done, users: true },
+      },
+    }));
+    toast("Invitation sent", "good", `${res.email} · ${res.role}`);
+    return true;
+  } else {
+    toast("Invitation failed", "urgent", "Could not invite user");
+    return false;
+  }
+}
+
+export async function updateStaffRole(id: string, role: Role) {
+  set((s) => ({
+    users: s.users.map((u) => (u.id === id ? { ...u, role } : u)),
+  }));
+  const res = await api.updateUserRole(id, role);
+  if (res) {
+    toast("Role updated", "good", `${res.name} is now ${res.role}`);
+  } else {
+    toast("Update failed", "urgent", "Could not update user role");
+  }
+}
+
+export async function deleteStaffUser(id: string) {
+  const target = store.state.users.find((u) => u.id === id);
+  set((s) => ({
+    users: s.users.filter((u) => u.id !== id),
+  }));
+  const res = await api.deleteUser(id);
+  if (res) {
+    toast("User removed", "good", target?.name || "Staff member");
+  }
+}
+
 export function setBillingCycle(billingCycle: Subscription["billingCycle"]) {
   set((s) => ({ subscription: { ...s.subscription, billingCycle } }));
+  api.updateSubscription({ billingCycle });
   toast(
     billingCycle === "yearly" ? "Switched to yearly billing" : "Switched to monthly billing",
     "good",
@@ -886,35 +943,93 @@ export function setPlan(plan: PlanKey) {
   const tier = planTiers.find((t) => t.key === plan);
   if (!tier) return;
   set((s) => ({ subscription: { ...s.subscription, plan } }));
+  api.updateSubscription({ plan });
   const rooms = store.state.subscription.rooms;
   toast(`Plan changed to ${tier.name}`, "good", `${rooms} rooms · ${money(tier.pricePerRoom * rooms)} per month`);
 }
 
-export function addKnowledgeDoc(name: string, category: KnowledgeDoc["category"]) {
-  const format = (name.split(".").pop() ?? "pdf").toUpperCase();
-  const doc: KnowledgeDoc = {
-    id: uid("k"),
-    name,
+export async function uploadKnowledgeDoc(file: File, category: KnowledgeDoc["category"] = "Hotel Policies") {
+  const tempId = uid("k-temp");
+  const ext = (file.name.split(".").pop() ?? "pdf").toUpperCase();
+  const format: KnowledgeDoc["format"] =
+    ext === "DOC" || ext === "DOCX" ? "DOCX" : ext === "CSV" ? "CSV" : ext === "TXT" ? "TXT" : "PDF";
+
+  const tempDoc: KnowledgeDoc = {
+    id: tempId,
+    name: file.name,
     category,
-    format: format === "DOC" ? "DOCX" : (format as KnowledgeDoc["format"]),
-    size: "—",
-    updated: "Just now",
+    format,
+    size: `${(file.size / 1024).toFixed(1)} KB`,
+    updated: "Uploading...",
     status: "Processing",
     aiReady: false,
     usedToday: 0,
   };
-  set((s) => ({ knowledge: [doc, ...s.knowledge] }));
-  toast("Uploaded — indexing", "ai", `${name} will be available to the AI shortly`);
-  setTimeout(() => {
-    set((s) => ({ knowledge: s.knowledge.map((k) => (k.id === doc.id ? { ...k, status: "Indexed", aiReady: true } : k)) }));
-    toast("Indexed and ready", "good", name);
-  }, 2600);
+
+  // 1. Temporary optimistic uploading item
+  set((s) => ({ knowledge: [tempDoc, ...s.knowledge] }));
+  toast("Uploading document", "ai", `${file.name} is being uploaded and indexed`);
+
+  try {
+    // 2. Call real backend multipart upload
+    const res = await api.uploadKnowledgeDoc(file, category);
+    if (res && res.id) {
+      // 3. Replace temporary item with server response
+      const serverDoc: KnowledgeDoc = {
+        id: res.id,
+        name: res.name || file.name,
+        category: (res.category as KnowledgeDoc["category"]) || category,
+        format: (res.format?.toUpperCase() as KnowledgeDoc["format"]) || format,
+        size: res.size || `${(file.size / 1024).toFixed(1)} KB`,
+        updated: res.updated || "Just now",
+        status: res.status === "error" ? "Needs Review" : res.status === "indexed" ? "Indexed" : "Processing",
+        aiReady: res.aiReady ?? (res.status === "indexed"),
+        usedToday: res.usedToday || 0,
+      };
+      set((s) => ({
+        knowledge: s.knowledge.map((k) => (k.id === tempId ? serverDoc : k)),
+      }));
+      toast(
+        serverDoc.status === "Indexed" ? "Indexed and ready" : "Upload processed",
+        serverDoc.status === "Indexed" ? "good" : "attend",
+        file.name
+      );
+      return serverDoc;
+    } else {
+      set((s) => ({
+        knowledge: s.knowledge.map((k) => (k.id === tempId ? { ...k, status: "Needs Review", updated: "Failed" } : k)),
+      }));
+      toast("Upload failed", "urgent", `Could not process ${file.name}`);
+    }
+  } catch (err) {
+    set((s) => ({
+      knowledge: s.knowledge.map((k) => (k.id === tempId ? { ...k, status: "Needs Review", updated: "Error" } : k)),
+    }));
+    toast("Upload error", "urgent", `Network or server error uploading ${file.name}`);
+  }
 }
 
-export function removeKnowledgeDoc(id: string) {
+export function addKnowledgeDoc(name: string, category: KnowledgeDoc["category"]) {
+  const mimeType = name.endsWith(".csv")
+    ? "text/csv"
+    : name.endsWith(".docx")
+    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    : name.endsWith(".pdf")
+    ? "application/pdf"
+    : "text/plain";
+  const blob = new Blob([`Knowledge base document content for ${name}\nGenerated policies and hotel rules.`], { type: mimeType });
+  const file = new File([blob], name, { type: mimeType });
+  return uploadKnowledgeDoc(file, category);
+}
+
+export async function removeKnowledgeDoc(id: string) {
   const doc = store.state.knowledge.find((k) => k.id === id);
   set((s) => ({ knowledge: s.knowledge.filter((k) => k.id !== id) }));
   toast("Source removed", "attend", doc?.name);
+
+  if (!id.startsWith("k-temp")) {
+    await api.deleteKnowledgeDoc(id);
+  }
 }
 
 /* ------------------------------------------------------ onboarding flow -- */
@@ -1114,7 +1229,7 @@ export function completeOnboarding() {
 
 /* ------------------------------------------------------------- selectors -- */
 
-export function channelLabel(channel: Channel) {
+export function channelLabel(channel: Channel | string) {
   switch (channel) {
     case "whatsapp":
       return "WhatsApp";
@@ -1149,7 +1264,20 @@ export const selectors = {
 
 export async function initBackendSync() {
   try {
-    const [rooms, tasks, issues, convs, upsells, activities, onboardingData] = await Promise.all([
+    const [
+      rooms,
+      tasks,
+      issues,
+      convs,
+      upsells,
+      activities,
+      onboardingData,
+      knowledgeData,
+      aiRulesData,
+      usersData,
+      subData,
+      invoicesData,
+    ] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
       api.getIssues(),
@@ -1157,6 +1285,11 @@ export async function initBackendSync() {
       api.getUpsells(),
       api.getActivity(),
       api.getOnboarding(),
+      api.getKnowledgeDocs(),
+      api.getAiRules(),
+      api.getUsers(),
+      api.getSubscription(),
+      api.getInvoices(),
     ]);
 
     if (rooms && rooms.length > 0) {
@@ -1176,6 +1309,49 @@ export async function initBackendSync() {
     }
     if (activities && activities.length > 0) {
       set(() => ({ activity: activities }));
+    }
+    if (usersData && Array.isArray(usersData) && usersData.length > 0) {
+      set(() => ({ users: usersData }));
+    }
+    if (subData) {
+      set((s) => ({
+        subscription: {
+          ...s.subscription,
+          ...subData,
+        },
+        invoices: subData.invoices && subData.invoices.length > 0 ? subData.invoices : s.invoices,
+      }));
+    }
+    if (invoicesData && Array.isArray(invoicesData) && invoicesData.length > 0) {
+      set(() => ({ invoices: invoicesData }));
+    }
+    if (knowledgeData && Array.isArray(knowledgeData) && knowledgeData.length > 0) {
+      const mappedDocs: KnowledgeDoc[] = knowledgeData.map((d: any) => ({
+        id: d.id,
+        name: d.name || d.fileName || "Document",
+        category: (d.category as KnowledgeDoc["category"]) || "Hotel Policies",
+        format: (d.format?.toUpperCase() as KnowledgeDoc["format"]) || "PDF",
+        size: d.size || (d.fileSize ? `${(d.fileSize / 1024).toFixed(1)} KB` : "—"),
+        updated: d.updated || "Recently",
+        status: d.status === "error" ? "Needs Review" : d.status === "indexed" ? "Indexed" : "Processing",
+        aiReady: d.aiReady ?? (d.status === "indexed"),
+        usedToday: d.usedToday || 0,
+      }));
+      set(() => ({ knowledge: mappedDocs }));
+    }
+    if (aiRulesData) {
+      if (aiRulesData.aiMode) {
+        set(() => ({ aiMode: aiRulesData.aiMode }));
+      }
+      const rawRules = aiRulesData.rules || (Array.isArray(aiRulesData) ? aiRulesData : null);
+      if (rawRules && Array.isArray(rawRules) && rawRules.length > 0) {
+        const mappedRules: AiRule[] = rawRules.map((r: any) => ({
+          topic: r.topic,
+          mode: r.mode === "Autonomous" ? "Autonomous" : r.mode === "Human Approval" ? "Human Approval" : "Always Escalate",
+          note: r.note || "",
+        }));
+        set(() => ({ aiRules: mappedRules }));
+      }
     }
     if (onboardingData) {
       set((s) => ({

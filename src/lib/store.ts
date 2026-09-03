@@ -1062,6 +1062,167 @@ export async function removeKnowledgeDoc(id: string) {
   }
 }
 
+export async function loadBackendData() {
+  try {
+    const [
+      roomsRes,
+      tasksRes,
+      conversationsRes,
+      issuesRes,
+      upsellsRes,
+      activityRes,
+      briefingRes,
+      rulesRes,
+      knowledgeRes,
+      usersRes,
+      subRes,
+      invoicesRes,
+      profileRes,
+    ] = await Promise.allSettled([
+      api.getRooms(),
+      api.getTasks(),
+      api.getConversations(),
+      api.getIssues(),
+      api.getUpsells(),
+      api.getActivity(),
+      api.getBriefing(),
+      api.getAiRules(),
+      api.getKnowledgeDocs(),
+      api.getUsers(),
+      api.getSubscription(),
+      api.getInvoices(),
+      api.getHotelProfile(),
+    ]);
+
+    set((s) => {
+      const updates: Partial<AppState> = {};
+
+      if (roomsRes.status === "fulfilled" && Array.isArray(roomsRes.value) && roomsRes.value.length > 0) {
+        updates.rooms = roomsRes.value.map((r: any) => ({
+          number: r.number || r.id,
+          category: r.category || "Deluxe King",
+          floor: r.floor || 1,
+          status: r.status || "Clean",
+          cleaningType: r.cleaningType || "Stayover",
+          cleaner: r.cleaner || undefined,
+          priority: r.priority || "Normal",
+          arrivalTime: r.arrivalTime || undefined,
+          vip: Boolean(r.vip),
+          guestName: r.guestName || undefined,
+          guestStatus: r.guestStatus || "Vacant",
+          notes: Array.isArray(r.notes) ? r.notes : [],
+          updatedAt: r.updatedAt || "Just now",
+          earlyCheckIn: Boolean(r.earlyCheckIn),
+        }));
+      }
+
+      if (tasksRes.status === "fulfilled" && Array.isArray(tasksRes.value)) {
+        updates.tasks = tasksRes.value.map((t: any) => ({
+          id: t.id,
+          title: t.title,
+          detail: t.detail || "",
+          department: t.department || "Front Office",
+          priority: t.priority || "Normal",
+          room: t.room || undefined,
+          guest: t.guest || undefined,
+          conversationId: t.conversationId || undefined,
+          assignee: t.assignee || undefined,
+          status: t.status || "New",
+          createdAt: t.createdAt || "Today",
+          due: t.due || undefined,
+          source: t.source || "Dashboard",
+          trail: Array.isArray(t.trail) ? t.trail : typeof t.trail === "string" ? JSON.parse(t.trail) : [],
+        }));
+      }
+
+      if (conversationsRes.status === "fulfilled" && Array.isArray(conversationsRes.value)) {
+        updates.conversations = conversationsRes.value.map((c: any) => ({
+          id: c.id,
+          guest: c.guest || { id: c.guestId || "g-1", name: c.guestName || "Guest", phone: "", email: "", room: c.room, vip: false, language: "en", sentiment: "neutral" },
+          primaryChannel: c.primaryChannel || "whatsapp",
+          unread: Boolean(c.unread),
+          aiStatus: c.aiStatus || "ai-handling",
+          lastAt: c.lastAt || "Just now",
+          room: c.room || undefined,
+          reservation: c.reservation || undefined,
+          escalation: typeof c.escalation === "string" ? JSON.parse(c.escalation) : c.escalation || undefined,
+          messages: Array.isArray(c.messages) ? c.messages : [],
+        }));
+      }
+
+      if (issuesRes.status === "fulfilled" && Array.isArray(issuesRes.value)) {
+        updates.issues = issuesRes.value.map((i: any) => ({
+          id: i.id,
+          room: i.room,
+          title: i.title,
+          detail: i.detail || "",
+          priority: i.priority || "Normal",
+          reportedBy: i.reportedBy || "Staff",
+          via: i.via || "whatsapp",
+          createdAt: i.createdAt || "Today",
+          assignee: i.assignee || undefined,
+          status: i.status || "Open",
+          outOfService: Boolean(i.outOfService),
+          updates: Array.isArray(i.updates) ? i.updates : typeof i.updates === "string" ? JSON.parse(i.updates) : [],
+        }));
+      }
+
+      if (upsellsRes.status === "fulfilled" && Array.isArray(upsellsRes.value)) {
+        updates.upsells = upsellsRes.value.map((u: any) => ({
+          id: u.id,
+          guest: u.guest || u.guestName || "Guest",
+          room: u.room || undefined,
+          offer: u.offer,
+          value: u.value || 0,
+          status: u.status || "Sent",
+          channel: u.channel || "whatsapp",
+          date: u.date || "Today",
+          conversationId: u.conversationId || undefined,
+        }));
+      }
+
+      if (activityRes.status === "fulfilled" && Array.isArray(activityRes.value)) {
+        updates.activity = activityRes.value.map((a: any) => ({
+          id: a.id,
+          at: a.at || "Just now",
+          kind: a.kind || "system",
+          text: a.text,
+          meta: a.meta || undefined,
+        }));
+      }
+
+      if (rulesRes.status === "fulfilled" && rulesRes.value) {
+        if (Array.isArray(rulesRes.value.rules)) {
+          updates.aiRules = rulesRes.value.rules;
+        }
+        if (rulesRes.value.aiMode) {
+          updates.aiMode = rulesRes.value.aiMode;
+        }
+      }
+
+      if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value) && usersRes.value.length > 0) {
+        updates.users = usersRes.value;
+      }
+
+      if (subRes.status === "fulfilled" && subRes.value) {
+        updates.subscription = subRes.value;
+      }
+
+      if (invoicesRes.status === "fulfilled" && Array.isArray(invoicesRes.value) && invoicesRes.value.length > 0) {
+        updates.invoices = invoicesRes.value;
+      }
+
+      if (profileRes.status === "fulfilled" && profileRes.value) {
+        updates.hotelProfile = { ...s.hotelProfile, ...profileRes.value };
+      }
+
+      return updates;
+    });
+  } catch (err) {
+    console.warn("loadBackendData notice:", err);
+  }
+}
+
 export async function syncKnowledgeWithBackend() {
   try {
     const serverDocs = await api.getKnowledgeDocs();

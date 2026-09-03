@@ -73,7 +73,13 @@ export function AppShell({
   const [drawer, setDrawer] = useState<null | "activity" | "whatsapp">(null);
 
   useEffect(() => {
-    if (session.ready && !session.userId) navigate({ to: "/login" });
+    if (session.ready && !session.userId) {
+      navigate({ to: "/login" });
+    } else if (session.ready && session.userId) {
+      import("@/lib/store").then(({ loadBackendData }) => {
+        loadBackendData();
+      });
+    }
   }, [session.ready, session.userId, navigate]);
 
   useEffect(() => {

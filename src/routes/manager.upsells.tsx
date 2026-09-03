@@ -125,7 +125,7 @@ function ManagerUpsells() {
                 ))}
               </p>
               <p className="mt-3 border-t border-line-soft pt-3 text-[12.5px] text-ink-3">
-                {money(dailyStats.upsellWeek)} accepted over the last seven days.
+                {money(revenue)} accepted today ({upsells.length} total offers in database).
               </p>
             </Card>
 

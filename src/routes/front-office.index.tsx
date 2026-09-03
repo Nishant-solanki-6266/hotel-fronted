@@ -41,19 +41,35 @@ function FrontOfficeDashboard() {
   const arrivalsWaiting = rooms.filter((r) => r.arrivalTime && r.status !== "Clean" && r.status !== "Inspected");
   const aiHandling = conversations.filter((c) => c.aiStatus === "ai-handling").length;
 
+  const arrivalsCount = rooms.filter((r) => r.arrivalTime).length;
+  const departuresCount = rooms.filter((r) => r.guestStatus === "Departed" || r.guestStatus === "Departing").length;
+  const vipArrivalsCount = rooms.filter((r) => r.vip && r.arrivalTime).length;
+  const earlyCheckInsCount = rooms.filter((r) => r.earlyCheckIn).length;
+  const totalMessages = conversations.reduce((acc, c) => acc + (c.messages?.length || 0), 0);
+
   const lines: BriefLine[] = [
     {
-      text: `${dailyStats.arrivals} arrivals today. ${readyRooms.length} rooms are released and ${arrivalsWaiting.length} arrivals are still waiting on housekeeping.`,
-      tone: "attend",
+      text: `${arrivalsCount} arrivals scheduled today. ${readyRooms.length} rooms are released and ${arrivalsWaiting.length} arrivals are currently waiting on housekeeping.`,
+      tone: arrivalsWaiting.length > 0 ? "attend" : "good",
     },
-    { text: "Room 401 was released at 12:26 — Grace Okonkwo's 13:00 early arrival can check in immediately.", tone: "good", meta: "12:26" },
-    { text: "Yuki Tanabe (VIP, 5th stay) arrives at 14:00. Amélie is confirming a 20:00 table at De Kleine Zavel.", tone: "pine" },
-    { text: "307 is out of service with a shower leak and it is the VIP room. Milan expects to finish within 30 minutes.", tone: "urgent", meta: "MT-115" },
-    { text: "Hendrik Vos in 205 is waiting for an answer on a 15:00 checkout — occupancy says 14:00 is safer.", tone: "attend", meta: "before 10:30" },
-    { text: `The AI answered ${dailyStats.conversationsToday} messages so far and is holding ${aiHandling} conversations without you.`, tone: "ai" },
-    { text: "Priya Raghavan's card authorisation failed twice — ask for a new card at check-in.", tone: "urgent", meta: "208" },
-    { text: "Baby cot for 208 and the anniversary package for 310 are both in housekeeping's list.", tone: "good" },
+    {
+      text: `The AI answered ${totalMessages} guest messages so far and is holding ${aiHandling} conversations without requiring manual input.`,
+      tone: "ai",
+    },
+    {
+      text: `${escalations.length} conversation${escalations.length === 1 ? "" : "s"} currently escalated to the team.${escalations[0]?.escalation?.reason ? ` — ${escalations[0].escalation.reason}` : ""}`,
+      tone: escalations.length > 0 ? "urgent" : "good",
+    },
+    {
+      text: `${readyRooms.length} out of ${rooms.length} total rooms are clean and inspected for incoming guests.`,
+      tone: "good",
+    },
   ];
+
+  const briefOpening =
+    arrivalsWaiting.length > 0
+      ? `${arrivalsWaiting.length} arrival${arrivalsWaiting.length === 1 ? " is" : "s are"} waiting on housekeeping; ${readyRooms.length} rooms are released and ready for check-in.`
+      : "All incoming rooms are ready for check-in. The AI is managing active guest conversations.";
 
   return (
     <AppShell title="Front office — your shift, prepared">
@@ -69,11 +85,11 @@ function FrontOfficeDashboard() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <StatCard label="Arrivals" value={dailyStats.arrivals} hint={`${dailyStats.earlyCheckIns} early`} icon={LogIn} tone="pine" delay={0} />
-          <StatCard label="Departures" value={dailyStats.departures} hint="4 late checkouts" icon={LogOut} tone="mute" delay={40} />
+          <StatCard label="Arrivals" value={arrivalsCount} hint={`${earlyCheckInsCount} early`} icon={LogIn} tone="pine" delay={0} />
+          <StatCard label="Departures" value={departuresCount} hint="late checkouts monitored" icon={LogOut} tone="mute" delay={40} />
           <StatCard label="Rooms ready" value={`${readyRooms.length}/${rooms.length}`} hint={`${arrivalsWaiting.length} arrivals waiting`} icon={BedDouble} tone="attend" delay={80} />
           <StatCard label="Open requests" value={guestRequests.length} hint="in-house guests" icon={MessageSquare} tone="ai" delay={120} />
-          <StatCard label="VIP arrivals" value={dailyStats.vipArrivals} hint="1 at 14:00" icon={Crown} tone="pine" delay={160} />
+          <StatCard label="VIP arrivals" value={vipArrivalsCount} hint={`${vipArrivalsCount} VIP expected`} icon={Crown} tone="pine" delay={160} />
           <StatCard
             label="Escalated"
             value={escalations.length}
@@ -88,7 +104,7 @@ function FrontOfficeDashboard() {
 
         <Briefing
           eyebrow="AI front office brief"
-          opening="Two rooms decide your morning: 401 is ready for the early arrival, 307 is not ready for the VIP."
+          opening={briefOpening}
           lines={lines}
           action={
             <Button icon={ArrowRight} onClick={() => navigate({ to: "/front-office/conversations" })}>

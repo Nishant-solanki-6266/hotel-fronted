@@ -36,6 +36,7 @@ function ManagerDashboard() {
   const guestRequests = useApp(selectors.guestRequests);
   const rooms = useApp((s) => s.rooms);
   const tasks = useApp((s) => s.tasks);
+  const upsells = useApp((s) => s.upsells);
   const upsellTotal = useApp(selectors.acceptedUpsellTotal);
   const conversations = useApp((s) => s.conversations);
 
@@ -44,43 +45,54 @@ function ManagerDashboard() {
   const outOfService = rooms.filter((r) => r.status === "Blocked" || r.status === "Maintenance").length;
   const aiHandled = conversations.filter((c) => c.aiStatus === "ai-handling" || c.aiStatus === "resolved").length;
 
+  const arrivalsCount = rooms.filter((r) => r.arrivalTime).length;
+  const departuresCount = rooms.filter((r) => r.guestStatus === "Departed" || r.guestStatus === "Departing").length;
+  const inHouseCount = rooms.filter((r) => r.guestStatus !== "Vacant").length;
+  const occupancyRate = rooms.length ? Math.round((inHouseCount / rooms.length) * 100) : 0;
+  const vipArrivalsCount = rooms.filter((r) => r.vip && r.arrivalTime).length;
+  const earlyCheckInsCount = rooms.filter((r) => r.earlyCheckIn).length;
+  const totalMessages = conversations.reduce((acc, c) => acc + (c.messages?.length || 0), 0);
+
   const briefLines: BriefLine[] = [
     {
-      text: `${dailyStats.arrivals} arrivals and ${dailyStats.departures} departures. ${dailyStats.vipArrivals} VIP arrivals, ${dailyStats.earlyCheckIns} early check-ins already agreed.`,
+      text: `${arrivalsCount} arrivals and ${departuresCount} departures. ${vipArrivalsCount} VIP arrivals, ${earlyCheckInsCount} early check-ins already agreed.`,
       tone: "ai",
-      meta: `${dailyStats.occupancy} occupancy`,
+      meta: `${occupancyRate}% occupancy`,
     },
     {
-      text: `The AI answered ${dailyStats.conversationsToday} guest messages overnight and this morning, ${dailyStats.aiResolutionRate}% without a human.`,
+      text: `The AI answered ${totalMessages} guest messages across channels, handling ${aiHandled} conversations autonomously.`,
       tone: "good",
-      meta: dailyStats.avgResponse,
+      meta: "< 45s avg",
     },
     {
-      text: `${escalations.length} conversation${escalations.length === 1 ? "" : "s"} need you personally — a warm room in 302 and a billing dispute from a checked-out guest.`,
-      tone: "urgent",
+      text: `${escalations.length} conversation${escalations.length === 1 ? "" : "s"} need you personally.${escalations[0]?.escalation?.reason ? ` — ${escalations[0].escalation.reason}` : ""}`,
+      tone: escalations.length > 0 ? "urgent" : "good",
     },
     {
-      text: `Room 307 is out of service with a shower leak and a VIP arrives at 14:00. Reception has been warned; a decision on moving the guest is yours.`,
-      tone: "urgent",
-      meta: "MT-115",
+      text: `${roomsToClean} rooms still to clean, ${roomsReady} released out of ${rooms.length} total rooms.`,
+      tone: roomsToClean > 0 ? "attend" : "good",
     },
     {
-      text: `${roomsToClean} rooms still to clean, ${roomsReady} released. Room 401 was released at 12:26 for the 13:00 early arrival.`,
-      tone: "attend",
-    },
-    {
-      text: `${money(dailyStats.upsellToday)} of upsells accepted today from ${dailyStats.offersSent} offers — mostly breakfast, parking and one romantic package.`,
+      text: `${money(upsellTotal)} of upsells accepted today from ${upsells.length} offers made by AI.`,
       tone: "good",
-      meta: `${dailyStats.offersAccepted} accepted`,
+      meta: `${upsells.filter((u) => u.status === "Accepted").length} accepted`,
     },
   ];
 
   const priorities = [
-    { text: "Decide on 302 — upgrade to 310 or reduce the second night", tone: "urgent" as const, who: "You" },
-    { text: "Approve the €47.60 credit note for Nadia Haddad", tone: "urgent" as const, who: "You" },
-    { text: "307 shower leak must be closed before the 14:00 VIP arrival", tone: "attend" as const, who: "Maintenance" },
-    { text: "Late checkout answer for 205 before 10:30", tone: "attend" as const, who: "Front Office" },
-    { text: "Card authorisation failed for 208 — collect a new card at check-in", tone: "attend" as const, who: "Front Office" },
+    ...escalations.slice(0, 2).map((e) => ({
+      text: `Review escalation: ${e.escalation?.reason || "Guest query in " + (e.room || "thread")}`,
+      tone: "urgent" as const,
+      who: "You",
+    })),
+    ...tasks
+      .filter((t) => t.status !== "Completed" && (t.priority === "Urgent" || t.priority === "High"))
+      .slice(0, 3)
+      .map((t) => ({
+        text: `${t.title}${t.room ? " (" + t.room + ")" : ""}`,
+        tone: t.priority === "Urgent" ? ("urgent" as const) : ("attend" as const),
+        who: t.department,
+      })),
   ];
 
   const departments = [
@@ -99,7 +111,7 @@ function ManagerDashboard() {
       lead: "Rosa Ferreira",
       stat: `${roomsReady}/${rooms.length} rooms released`,
       note: `${roomsToClean} to clean · updates arriving on WhatsApp`,
-      progress: Math.round((roomsReady / rooms.length) * 100),
+      progress: rooms.length ? Math.round((roomsReady / rooms.length) * 100) : 100,
       tone: "attend" as const,
     },
     {
@@ -107,11 +119,19 @@ function ManagerDashboard() {
       icon: Wrench,
       lead: "Peter Janssens",
       stat: `${openIssues.length} open issues`,
-      note: `${outOfService} rooms affected · 1 waiting for parts`,
-      progress: 45,
+      note: `${outOfService} rooms affected · ${openIssues.filter((i) => i.status === "Waiting Parts").length} waiting for parts`,
+      progress: openIssues.length ? Math.round((1 - openIssues.length / Math.max(openIssues.length + 2, 1)) * 100) : 100,
       tone: "urgent" as const,
     },
   ];
+
+  const briefingOpening =
+    escalations.length === 0
+      ? "The AI has already handled everything routine. What is below is what still involves a person."
+      : `${escalations.length} conversation${escalations.length === 1 ? "" : "s"} need your attention: ${escalations
+          .map((e) => e.escalation?.reason || "room " + (e.room || ""))
+          .slice(0, 2)
+          .join(", ")}. Everything else is moving.`;
 
   return (
     <AppShell title="Morning operational briefing">
@@ -127,9 +147,9 @@ function ManagerDashboard() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-          <StatCard label="Arrivals" value={dailyStats.arrivals} hint={`${dailyStats.vipArrivals} VIP`} icon={LogIn} tone="pine" delay={0} />
-          <StatCard label="Departures" value={dailyStats.departures} hint="4 late checkouts" icon={LogOut} tone="mute" delay={40} />
-          <StatCard label="In-house" value={dailyStats.inHouse} hint={`${dailyStats.occupancy} occupancy`} icon={Users} tone="pine" delay={80} />
+          <StatCard label="Arrivals" value={arrivalsCount} hint={`${vipArrivalsCount} VIP`} icon={LogIn} tone="pine" delay={0} />
+          <StatCard label="Departures" value={departuresCount} hint={`${earlyCheckInsCount} early checkouts`} icon={LogOut} tone="mute" delay={40} />
+          <StatCard label="In-house" value={inHouseCount} hint={`${occupancyRate}% occupancy`} icon={Users} tone="pine" delay={80} />
           <StatCard label="Guest requests" value={guestRequests.length} hint="open right now" icon={MessageSquare} tone="ai" delay={120} />
           <StatCard
             label="Escalations"
@@ -146,7 +166,7 @@ function ManagerDashboard() {
         </div>
 
         <Briefing
-          opening="Two things need you: the air conditioning complaint in 302, and a billing dispute from room 411. Everything else is moving."
+          opening={briefingOpening}
           lines={briefLines}
           action={
             <Button icon={ArrowRight} onClick={() => navigate({ to: "/manager/conversations" })}>

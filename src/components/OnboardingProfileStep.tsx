@@ -92,15 +92,18 @@ export function OnboardingProfileStep() {
         <Eyebrow>Languages your team can proofread</Eyebrow>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {languageOptions.map((language) => {
-            const on = draft.languages.includes(language);
+            const on = (draft.languages || []).includes(language);
             return (
               <button
                 key={language}
                 onClick={() =>
-                  setDraft((d) => ({
-                    ...d,
-                    languages: on ? d.languages.filter((l) => l !== language) : [...d.languages, language],
-                  }))
+                  setDraft((d) => {
+                    const langs = d.languages || [];
+                    return {
+                      ...d,
+                      languages: on ? langs.filter((l) => l !== language) : [...langs, language],
+                    };
+                  })
                 }
                 className={cn(
                   "rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors",

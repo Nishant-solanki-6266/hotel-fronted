@@ -66,6 +66,7 @@ const stageLabel: Record<Conversation["stage"], string> = {
 };
 
 function matches(conversation: Conversation, filter: Filter) {
+  const channels = conversation.channels || (conversation.primaryChannel ? [conversation.primaryChannel] : ["whatsapp"]);
   switch (filter) {
     case "All":
       return true;
@@ -78,9 +79,9 @@ function matches(conversation: Conversation, filter: Filter) {
     case "Unresolved":
       return conversation.aiStatus !== "resolved";
     case "WhatsApp":
-      return conversation.channels.includes("whatsapp");
+      return channels.includes("whatsapp");
     case "Email":
-      return conversation.channels.some((c) => c !== "whatsapp");
+      return channels.some((c) => c !== "whatsapp");
     case "Pre-arrival":
       return conversation.stage === "pre-arrival";
     case "In-house":
@@ -91,7 +92,8 @@ function matches(conversation: Conversation, filter: Filter) {
 }
 
 function lastGuestLine(conversation: Conversation) {
-  const message = [...conversation.messages].reverse().find((m) => m.author !== "system");
+  const msgs = conversation.messages || [];
+  const message = [...msgs].reverse().find((m) => m.author !== "system");
   if (!message) return "";
   const prefix = message.author === "ai" ? "AI: " : message.author === "staff" ? `${message.staffName ?? "Staff"}: ` : "";
   return prefix + message.body.replace(/\n+/g, " ");
@@ -236,9 +238,11 @@ function GuestContext({
   staffName: string;
   onCreateTask: () => void;
 }) {
-  const tasks = useApp((s) => s.tasks.filter((t) => conversation.taskIds.includes(t.id)));
-  const guest = conversation.guest;
-  const reservation = guest.reservation;
+  const taskIds = conversation.taskIds || [];
+  const tasks = useApp((s) => s.tasks.filter((t) => taskIds.includes(t.id)));
+  const guest = conversation.guest || ({} as any);
+  const reservation = guest.reservation || { number: "—" };
+  const tags = guest.tags || [];
 
   return (
     <div className="space-y-5">
@@ -253,11 +257,11 @@ function GuestContext({
           )}
         </div>
         <p className="mt-1 text-[12px] text-ink-3">
-          {guest.country} · speaks {guest.language} · {guest.previousStays} previous {guest.previousStays === 1 ? "stay" : "stays"}
+          {guest.country} · speaks {guest.language} · {guest.previousStays ?? 0} previous {guest.previousStays === 1 ? "stay" : "stays"}
         </p>
-        {guest.tags.length > 0 && (
+        {tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {guest.tags.map((t) => (
+            {tags.map((t: string) => (
               <span key={t} className="rounded-full border border-line bg-paper px-2 py-0.5 text-[10.5px] text-ink-3">
                 {t}
               </span>
@@ -537,11 +541,11 @@ export function Inbox({ variant, staffName }: { variant: "manager" | "front-offi
                   {c.escalation && <TriangleAlert className="size-3.5 shrink-0 text-urgent" />}
                 </span>
                 <span className="tnum font-mono text-[11.5px] text-ink-3">
-                  {c.guest.room ? `${c.guest.room} · ` : ""}
-                  {c.guest.reservation.number}
+                  {c.guest?.room ? `${c.guest.room} · ` : ""}
+                  {c.guest?.reservation?.number ?? "—"}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  {c.channels.map((ch) => (
+                  {(c.channels || (c.primaryChannel ? [c.primaryChannel] : ["whatsapp"])).map((ch) => (
                     <ChannelMark key={ch} channel={ch} />
                   ))}
                   <span className="text-[11px] text-ink-4 lg:hidden">{stageLabel[c.stage]}</span>

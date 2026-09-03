@@ -70,8 +70,17 @@ export const api = {
       body: JSON.stringify({ status, note, via }),
     }),
 
+  // Auth
+  login: (credentials: { email?: string; password?: string; userId?: string }) =>
+    request<{ token: string; user: any }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    }),
+  getMe: () => request<any>('/auth/me'),
+
   // Conversations / Chat
   getConversations: () => request<any[]>('/conversations'),
+  getConversationById: (id: string) => request<any>(`/conversations/${id}`),
   sendReply: (id: string, body: string, staffName?: string, channel?: string) =>
     request(`/conversations/${id}/reply`, {
       method: 'POST',
@@ -81,6 +90,15 @@ export const api = {
     request(`/conversations/${id}/takeover`, {
       method: 'POST',
       body: JSON.stringify({ aiStatus }),
+    }),
+  escalateConversation: (id: string, reason?: string, urgency?: string, suggested?: string) =>
+    request(`/conversations/${id}/escalate`, {
+      method: 'POST',
+      body: JSON.stringify({ reason, urgency, suggested }),
+    }),
+  resolveConversation: (id: string) =>
+    request(`/conversations/${id}/resolve`, {
+      method: 'POST',
     }),
 
   // Upsells

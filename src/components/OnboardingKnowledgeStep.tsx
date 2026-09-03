@@ -20,6 +20,7 @@ const suggestions: { name: string; category: KnowledgeDoc["category"] }[] = [
 
 export function OnboardingKnowledgeStep() {
   const knowledge = useApp((s) => s.knowledge);
+  const [name, setName] = useState("Hotel Policy — Pets.pdf");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState<KnowledgeDoc["category"]>("Hotel Policies");
   const [isDragging, setIsDragging] = useState(false);
@@ -35,6 +36,7 @@ export function OnboardingKnowledgeStep() {
     try {
       await uploadKnowledgeDoc(file, category);
       setSelectedFile(null);
+      setName("");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -49,7 +51,16 @@ export function OnboardingKnowledgeStep() {
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       setSelectedFile(file);
-      handleFile(file);
+      setName(file.name);
+    }
+  };
+
+  const handleAdd = () => {
+    if (selectedFile) {
+      handleFile(selectedFile);
+    } else if (name.trim()) {
+      addKnowledgeDoc(name.trim(), category);
+      setName("");
     }
   };
 
@@ -69,10 +80,9 @@ export function OnboardingKnowledgeStep() {
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           className={cn(
-            "rounded-[10px] border border-dashed p-4 text-center transition-colors cursor-pointer",
-            isDragging ? "border-pine-400 bg-pine-50/20" : "border-line bg-paper/50 hover:bg-paper/80"
+            "rounded-[10px] border border-dashed p-4 text-center transition-colors",
+            isDragging ? "border-pine-400 bg-pine-50/20" : "border-line bg-paper/50"
           )}
-          onClick={() => fileInputRef.current?.click()}
         >
           <input
             ref={fileInputRef}
@@ -83,27 +93,38 @@ export function OnboardingKnowledgeStep() {
               if (e.target.files && e.target.files.length > 0) {
                 const file = e.target.files[0];
                 setSelectedFile(file);
-                handleFile(file);
+                setName(file.name);
               }
             }}
           />
 
-          <Upload className={cn("mx-auto size-5 transition-colors", isDragging ? "text-pine-600" : "text-ink-4")} />
-          <p className="mt-2 text-[13px] font-medium text-ink-2">
-            {selectedFile ? selectedFile.name : "Drop files here or click to browse"}
-          </p>
-          <p className="mt-0.5 text-[11.5px] text-ink-4">PDF, DOCX, TXT or CSV (up to 10 MB) · indexed in about a minute</p>
-
           <div
-            className="mx-auto mt-3 flex max-w-md flex-wrap items-end gap-2"
-            onClick={(e) => e.stopPropagation()}
+            className="cursor-pointer"
+            onClick={() => fileInputRef.current?.click()}
           >
-            <label className="text-left flex-1 min-w-[140px]">
+            <Upload className={cn("mx-auto size-5 transition-colors", isDragging ? "text-pine-600" : "text-ink-4")} />
+            <p className="mt-2 text-[13px] font-medium text-ink-2">Drop files here</p>
+            <p className="mt-0.5 text-[11.5px] text-ink-4">PDF, DOCX, TXT or CSV · indexed in about a minute</p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-[1fr_1fr] gap-3 text-left">
+            <label className="block">
+              <span className="text-[11.5px] font-medium text-ink-3">File name</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Hotel Policy — Pets.pdf"
+                className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[12.5px] text-ink outline-none focus:border-pine-400"
+              />
+            </label>
+
+            <label className="block">
               <span className="text-[11.5px] font-medium text-ink-3">Category</span>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as KnowledgeDoc["category"])}
-                className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[12.5px] outline-none focus:border-pine-400"
+                className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[12.5px] text-ink outline-none focus:border-pine-400"
               >
                 {categories.map((c) => (
                   <option key={c} value={c}>
@@ -112,13 +133,17 @@ export function OnboardingKnowledgeStep() {
                 ))}
               </select>
             </label>
+          </div>
 
+          <div className="mt-3 flex justify-start">
             <Button
+              variant="outline"
+              size="sm"
               icon={isUploading ? Loader2 : Plus}
-              disabled={isUploading}
-              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading || (!selectedFile && !name.trim())}
+              onClick={handleAdd}
             >
-              {isUploading ? "Uploading..." : "Select & Upload"}
+              {isUploading ? "Uploading..." : "Add"}
             </Button>
           </div>
         </div>

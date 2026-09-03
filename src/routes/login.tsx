@@ -37,20 +37,20 @@ function Login() {
   const [busy, setBusy] = useState(false);
   const user = staff.find((u) => u.id === selected)!;
 
-  const submit = () => {
+  const submit = async () => {
     setBusy(true);
-    signIn(user.id);
-    setTimeout(() => navigate({ to: roleHome[user.role] }), 380);
+    await signIn(user.id);
+    setTimeout(() => navigate({ to: roleHome[user.role] }), 150);
   };
 
   // First login for a hotel that has not been set up yet — clears the seeded connections
   // and opens the onboarding wizard as the manager.
-  const firstLogin = () => {
+  const firstLogin = async () => {
     const manager = staff.find((u) => u.role === "manager") ?? user;
     setBusy(true);
     startOnboarding();
-    signIn(manager.id);
-    setTimeout(() => navigate({ to: "/onboarding" }), 380);
+    await signIn(manager.id);
+    setTimeout(() => navigate({ to: "/onboarding" }), 150);
   };
 
   return (

@@ -192,12 +192,15 @@ function HotelProfilePanel() {
     });
 
   const toggleLanguage = (language: string) =>
-    setDraft((d) => ({
-      ...d,
-      languages: d.languages.includes(language)
-        ? d.languages.filter((l) => l !== language)
-        : [...d.languages, language],
-    }));
+    setDraft((d) => {
+      const langs = d.languages || [];
+      return {
+        ...d,
+        languages: langs.includes(language)
+          ? langs.filter((l) => l !== language)
+          : [...langs, language],
+      };
+    });
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px] lg:items-start">
@@ -276,7 +279,7 @@ function HotelProfilePanel() {
             <span className="text-[11.5px] font-medium text-ink-3">Languages the AI replies in</span>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {languageOptions.map((language) => {
-                const on = draft.languages.includes(language);
+                const on = (draft.languages || []).includes(language);
                 return (
                   <button
                     key={language}

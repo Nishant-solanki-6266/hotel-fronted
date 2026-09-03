@@ -192,6 +192,19 @@ function freshOnboarding(): OnboardingState {
   };
 }
 
+const DELETED_KNOWLEDGE_KEY = "hotelogx.deleted_knowledge_docs.v1";
+
+function getInitialKnowledge(): KnowledgeDoc[] {
+  if (typeof window === "undefined") return knowledgeDocs;
+  try {
+    const raw = window.localStorage.getItem(DELETED_KNOWLEDGE_KEY);
+    const deletedIds: string[] = raw ? JSON.parse(raw) : [];
+    return knowledgeDocs.filter((k) => !deletedIds.includes(k.id));
+  } catch {
+    return knowledgeDocs;
+  }
+}
+
 export const store = new Store<AppState>({
   conversations: seedConversations,
   tasks: seedTasks,
@@ -201,7 +214,7 @@ export const store = new Store<AppState>({
   activity: seedActivity,
   waThreads: seedWaThreads,
   aiRules: seedRules,
-  knowledge: knowledgeDocs,
+  knowledge: getInitialKnowledge(),
   hotelProfile: hotel,
   users: seedStaff,
   subscription: seedSubscription,
@@ -351,6 +364,7 @@ export function escalateConversation(conversationId: string, reason: string) {
   }));
   pushActivity({ kind: "escalation", text: `Conversation escalated — ${reason}`, meta: "Dashboard" });
   toast("Escalated to the manager", "urgent", reason);
+  api.escalateConversation(conversationId, reason);
 }
 
 export function resolveConversation(conversationId: string) {
@@ -362,6 +376,7 @@ export function resolveConversation(conversationId: string) {
   }));
   pushActivity({ kind: "ai-reply", text: `Resolved the conversation with ${conversation?.guest.name ?? "the guest"}`, meta: "Dashboard" });
   toast("Marked as resolved", "good");
+  api.resolveConversation(conversationId);
 }
 
 export function markRead(conversationId: string) {
@@ -1027,8 +1042,56 @@ export async function removeKnowledgeDoc(id: string) {
   set((s) => ({ knowledge: s.knowledge.filter((k) => k.id !== id) }));
   toast("Source removed", "attend", doc?.name);
 
+  if (typeof window !== "undefined") {
+    try {
+      const raw = window.localStorage.getItem(DELETED_KNOWLEDGE_KEY);
+      const deletedIds: string[] = raw ? JSON.parse(raw) : [];
+      if (!deletedIds.includes(id)) {
+        deletedIds.push(id);
+        window.localStorage.setItem(DELETED_KNOWLEDGE_KEY, JSON.stringify(deletedIds));
+      }
+    } catch {}
+  }
+
   if (!id.startsWith("k-temp")) {
-    await api.deleteKnowledgeDoc(id);
+    try {
+      await api.deleteKnowledgeDoc(id);
+    } catch (e) {
+      console.warn("Backend knowledge deletion notice:", e);
+    }
+  }
+}
+
+export async function syncKnowledgeWithBackend() {
+  try {
+    const serverDocs = await api.getKnowledgeDocs();
+    if (serverDocs && Array.isArray(serverDocs)) {
+      const raw = typeof window !== "undefined" ? window.localStorage.getItem(DELETED_KNOWLEDGE_KEY) : null;
+      const deletedIds: string[] = raw ? JSON.parse(raw) : [];
+      
+      const mapped: KnowledgeDoc[] = serverDocs.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        category: (s.category as KnowledgeDoc["category"]) || "Hotel Policies",
+        format: (s.format?.toUpperCase() as KnowledgeDoc["format"]) || "PDF",
+        size: s.size || "12.4 KB",
+        updated: s.updated || "Just now",
+        status: s.status === "error" ? "Needs Review" : s.status === "indexed" ? "Indexed" : "Processing",
+        aiReady: s.aiReady ?? (s.status === "indexed"),
+        usedToday: s.usedToday || 0,
+      }));
+
+      set(() => {
+        const seedNonDeleted = knowledgeDocs.filter(
+          (k) => !deletedIds.includes(k.id) && !mapped.some((m) => m.id === k.id || m.name === k.name)
+        );
+        return {
+          knowledge: [...mapped.filter((m) => !deletedIds.includes(m.id)), ...seedNonDeleted],
+        };
+      });
+    }
+  } catch (e) {
+    console.warn("Knowledge backend sync notice:", e);
   }
 }
 
@@ -1301,8 +1364,31 @@ export async function initBackendSync() {
     if (issues && issues.length > 0) {
       set(() => ({ issues }));
     }
-    if (convs && convs.length > 0) {
-      set(() => ({ conversations: convs }));
+    if (convs && Array.isArray(convs) && convs.length > 0) {
+      const normalizedConvs: Conversation[] = convs.map((c: any) => ({
+        ...c,
+        channels: Array.isArray(c.channels) && c.channels.length > 0 ? c.channels : [c.primaryChannel || "whatsapp"],
+        messages: Array.isArray(c.messages) ? c.messages : [],
+        taskIds: Array.isArray(c.taskIds) ? c.taskIds : [],
+        knowledgeUsed: Array.isArray(c.knowledgeUsed) ? c.knowledgeUsed : [],
+        upsellIdeas: Array.isArray(c.upsellIdeas) ? c.upsellIdeas : [],
+        guest: {
+          ...c.guest,
+          tags: Array.isArray(c.guest?.tags) ? c.guest.tags : [],
+          reservation: c.guest?.reservation || c.guest?.reservations?.[0] || {
+            number: "N/A",
+            arrival: "—",
+            departure: "—",
+            nights: 1,
+            adults: 1,
+            children: 0,
+            roomType: "Standard",
+            status: "Confirmed",
+            rate: "—",
+          },
+        },
+      }));
+      set(() => ({ conversations: normalizedConvs }));
     }
     if (upsells && upsells.length > 0) {
       set(() => ({ upsells }));

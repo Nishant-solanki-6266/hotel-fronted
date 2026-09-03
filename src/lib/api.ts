@@ -97,6 +97,7 @@ export const api = {
   getKnowledge: () => request<any[]>('/manager/knowledge'),
   getHealth: () => request<any>('/health'),
 
+<<<<<<< HEAD
   // PMS Integration
   connectPms: (provider: string, propertyId: string) =>
     request<any>('/pms/connect', {
@@ -118,5 +119,28 @@ export const api = {
     request<any>('/onboarding/status', {
       method: 'PATCH',
       body: JSON.stringify(data),
+=======
+  // Onboarding & Setup
+  getOnboarding: () => request<any>('/onboarding/status'),
+  getHotelProfile: () => request<any>('/onboarding/profile'),
+  saveHotelProfile: (profileData: any) =>
+    request('/onboarding/profile', {
+      method: 'POST',
+      body: JSON.stringify(profileData),
+    }),
+  saveTopology: (topology: string) =>
+    request('/onboarding/topology', {
+      method: 'POST',
+      body: JSON.stringify({ topology }),
+    }),
+  saveOnboardingStep: (stepKey: string, data?: any) =>
+    request('/onboarding/step', {
+      method: 'POST',
+      body: JSON.stringify({ stepKey, data }),
+    }),
+  completeOnboarding: () =>
+    request('/onboarding/complete', {
+      method: 'POST',
+>>>>>>> f2448f6a679fb58f4ad642378b61aa77d55ae634
     }),
 };

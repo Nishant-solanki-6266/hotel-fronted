@@ -862,7 +862,14 @@ export function toggleWhatsApp() {
 }
 
 export function updateHotelProfile(patch: Partial<HotelProfile>) {
-  set((s) => ({ hotelProfile: { ...s.hotelProfile, ...patch } }));
+  set((s) => ({
+    hotelProfile: { ...s.hotelProfile, ...patch },
+    onboarding: {
+      ...s.onboarding,
+      done: { ...s.onboarding.done, profile: true },
+    },
+  }));
+  api.saveHotelProfile(patch);
   toast("Hotel profile saved", "good", "The AI uses these details when it answers guests");
 }
 
@@ -925,6 +932,7 @@ export function startOnboarding() {
 
 export function markOnboardingStep(step: OnboardingStepKey, done = true) {
   set((s) => ({ onboarding: { ...s.onboarding, done: { ...s.onboarding.done, [step]: done } } }));
+  api.saveOnboardingStep(step);
 }
 
 export function setWaTopology(waTopology: WaTopology) {
@@ -936,6 +944,7 @@ export function setWaTopology(waTopology: WaTopology) {
       done: { ...s.onboarding.done, "wa-internal": waTopology === "separate" ? s.onboarding.done["wa-internal"] : true },
     },
   }));
+  api.saveTopology(waTopology);
 }
 
 export async function connectPms(provider: string, propertyId: string) {
@@ -951,6 +960,7 @@ export async function connectPms(provider: string, propertyId: string) {
       },
     },
   }));
+<<<<<<< HEAD
 
   const res = await api.connectPms(provider, propertyId);
 
@@ -1008,6 +1018,10 @@ export async function syncPmsData() {
     toast("Sync failed", "urgent", err);
     return false;
   }
+=======
+  api.saveOnboardingStep("pms", { provider, propertyId });
+  toast(`${provider} connected`, "good", "Read-only — availability, rates and arrivals");
+>>>>>>> f2448f6a679fb58f4ad642378b61aa77d55ae634
 }
 
 /**
@@ -1064,6 +1078,7 @@ export function connectEmail(method: EmailMethod, settings: EmailServerSettings 
     integrations: { ...s.integrations, email: { provider, account: address, connected: true } },
   }));
 
+  api.saveOnboardingStep("email", { method, address });
   toast("Mailbox connected", "good", `${address} · ${detection?.providerName ?? "manual setup"}`);
 }
 
@@ -1118,6 +1133,7 @@ export function connectWhatsAppNumber(connectionType: WaConnectionType, phone: s
     };
   });
 
+  api.saveOnboardingStep(connectionType === "guest" ? "wa-guest" : "wa-internal", { phone });
   toast(`${connectionType === "guest" ? "Guest" : "Internal"} WhatsApp connected`, "good", phone);
 }
 
@@ -1142,6 +1158,7 @@ export function addOnboardingInvite(email: string, role: Role) {
       done: { ...s.onboarding.done, users: true },
     },
   }));
+  api.saveOnboardingStep("users", { email, role });
   toast("Invitation sent", "good", email);
 }
 
@@ -1151,6 +1168,7 @@ export function removeOnboardingInvite(email: string) {
 
 export function completeOnboarding() {
   set((s) => ({ onboarding: { ...s.onboarding, complete: true } }));
+  api.completeOnboarding();
   toast("Setup finished", "good", "Your workspace is live");
 }
 
@@ -1191,13 +1209,14 @@ export const selectors = {
 
 export async function initBackendSync() {
   try {
-    const [rooms, tasks, issues, convs, upsells, activities] = await Promise.all([
+    const [rooms, tasks, issues, convs, upsells, activities, onboardingData] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
       api.getIssues(),
       api.getConversations(),
       api.getUpsells(),
       api.getActivity(),
+      api.getOnboarding(),
     ]);
 
     if (rooms && rooms.length > 0) {
@@ -1217,6 +1236,19 @@ export async function initBackendSync() {
     }
     if (activities && activities.length > 0) {
       set(() => ({ activity: activities }));
+    }
+    if (onboardingData) {
+      set((s) => ({
+        onboarding: {
+          ...s.onboarding,
+          waTopology: onboardingData.waTopology || s.onboarding.waTopology,
+          complete: onboardingData.complete !== undefined ? onboardingData.complete : s.onboarding.complete,
+          done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done } : s.onboarding.done,
+        },
+        hotelProfile: (onboardingData.hotelProfile || onboardingData.hotel)
+          ? { ...s.hotelProfile, ...(onboardingData.hotelProfile || onboardingData.hotel) }
+          : s.hotelProfile,
+      }));
     }
   } catch (err) {
     console.warn("Backend sync skipped (fallback to seed data)", err);

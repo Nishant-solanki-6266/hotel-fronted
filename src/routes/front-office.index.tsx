@@ -16,7 +16,6 @@ import { Briefing } from "@/components/Briefing";
 import type { BriefLine } from "@/components/Briefing";
 import { TaskRow } from "@/components/TaskRow";
 import { Badge, Button, Card, Empty, Eyebrow, SectionTitle, StatCard, statusTone } from "@/components/ui";
-import { dailyStats } from "@/lib/data";
 import { useCurrentUser } from "@/lib/session";
 import { selectors, useApp } from "@/lib/store";
 import { greeting } from "@/lib/utils";

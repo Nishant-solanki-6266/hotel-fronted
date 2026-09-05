@@ -69,8 +69,13 @@ export function AppShell({
   const escalations = useApp(selectors.escalations).length;
   const openTasks = useApp(selectors.openTasks).length;
   const hotel = useApp((s) => s.hotelProfile);
+  const [mounted, setMounted] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [drawer, setDrawer] = useState<null | "activity" | "whatsapp">(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (session.ready && !session.userId) {
@@ -86,7 +91,7 @@ export function AppShell({
     setMobileNav(false);
   }, [pathname]);
 
-  if (!user) {
+  if (!mounted || !user) {
     return (
       <div className="grain flex min-h-dvh items-center justify-center bg-paper">
         <p className="text-[13px] text-ink-4">Loading your workspace…</p>

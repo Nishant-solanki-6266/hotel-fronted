@@ -12,19 +12,33 @@ import type { Task, TaskSource } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge, Button, priorityTone, statusTone } from "./ui";
 
-const sourceIcon: Record<TaskSource, React.ComponentType<{ className?: string }>> = {
+const DefaultSourceIcon = ClipboardList;
+
+const sourceIcon: Record<string, React.ComponentType<{ className?: string }>> = {
   "Guest WhatsApp": MessageCircle,
   "Guest Email": Mail,
   "AI Detection": Bot,
+  ai: Bot,
+  whatsapp: MessageCircle,
+  email: Mail,
   Manager: UserRound,
+  manager: UserRound,
   "Front Office": ClipboardList,
+  "front-office": ClipboardList,
   Housekeeping: ClipboardList,
+  housekeeping: ClipboardList,
   "PMS event": Server,
+  pms: Server,
 };
 
 export function TaskRow({ task, onOpen, showDepartment = true }: { task: Task; onOpen?: (task: Task) => void; showDepartment?: boolean }) {
+<<<<<<< HEAD
   const SourceIcon = (task.source && sourceIcon[task.source]) || Bot;
   const done = task.status === "Completed";
+=======
+  const SourceIcon = (task?.source ? sourceIcon[task.source] : undefined) ?? DefaultSourceIcon;
+  const done = task?.status === "Completed";
+>>>>>>> 2392a5e8c391566f4faf7adfb7c79660cf64331c
   return (
     <li
       className={cn(

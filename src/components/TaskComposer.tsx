@@ -1,17 +1,24 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { cleaners, staff, technicians } from "@/lib/data";
-import { createTask } from "@/lib/store";
-import type { Department, Priority, TaskSource } from "@/lib/types";
+import { createTask, useApp } from "@/lib/store";
+import type { Department, Priority, StaffUser, TaskSource } from "@/lib/types";
 import { Button, Eyebrow } from "./ui";
 
 const departments: Department[] = ["Front Office", "Housekeeping", "Maintenance", "Guest Request", "VIP", "Billing", "Follow-up"];
 const priorities: Priority[] = ["Urgent", "High", "Normal", "Low"];
 
-function assigneesFor(department: Department) {
-  if (department === "Housekeeping") return cleaners;
-  if (department === "Maintenance") return technicians;
-  return staff.filter((s) => s.role === "front-office" || s.role === "manager").map((s) => s.name);
+function assigneesFor(department: Department, users: StaffUser[]) {
+  if (department === "Housekeeping") {
+    const hk = users.filter((u) => u.role === "housekeeping").map((u) => u.name);
+    return hk.length > 0 ? hk : cleaners;
+  }
+  if (department === "Maintenance") {
+    const mt = users.filter((u) => u.role === "maintenance").map((u) => u.name);
+    return mt.length > 0 ? mt : technicians;
+  }
+  const fo = users.filter((s) => s.role === "front-office" || s.role === "manager").map((s) => s.name);
+  return fo.length > 0 ? fo : staff.filter((s) => s.role === "front-office" || s.role === "manager").map((s) => s.name);
 }
 
 export function TaskComposer({
@@ -25,6 +32,7 @@ export function TaskComposer({
   defaults?: { title?: string; room?: string; guest?: string; department?: Department; conversationId?: string };
   source?: TaskSource;
 }) {
+  const users = useApp((s) => s.users);
   const [title, setTitle] = useState(defaults?.title ?? "");
   const [detail, setDetail] = useState("");
   const [room, setRoom] = useState(defaults?.room ?? "");
@@ -34,7 +42,7 @@ export function TaskComposer({
   const [due, setDue] = useState("");
 
   if (!open) return null;
-  const options = assigneesFor(department);
+  const options = assigneesFor(department, users);
 
   const field = "mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] text-ink outline-none focus:border-pine-400";
   const label = "block text-[11.5px] font-medium text-ink-3";

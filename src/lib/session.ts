@@ -1,6 +1,7 @@
 import { Store, useStore } from "@tanstack/react-store";
 import { api } from "./api";
 import { staff } from "./data";
+import { store } from "./store";
 import type { Role, StaffUser } from "./types";
 
 const KEY = "hotelogx.session.v1";
@@ -72,7 +73,9 @@ export function useSession() {
 
 export function useCurrentUser(): StaffUser | null {
   const { userId } = useStore(sessionStore, (s) => s);
-  return staff.find((u) => u.id === userId) ?? null;
+  if (!userId) return null;
+  const storeUser = store.state.users.find((u) => u.id === userId);
+  return storeUser ?? staff.find((u) => u.id === userId) ?? null;
 }
 
 export const roleHome: Record<Role, string> = {

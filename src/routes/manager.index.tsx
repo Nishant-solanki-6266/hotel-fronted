@@ -18,7 +18,7 @@ import { Briefing } from "@/components/Briefing";
 import type { BriefLine } from "@/components/Briefing";
 import { EscalationCard } from "@/components/EscalationCard";
 import { Badge, Button, Card, Empty, Eyebrow, Meter, SectionTitle, Sparkline, StatCard, statusTone } from "@/components/ui";
-import { aiTrend, conversationTrend, dailyStats, upsellTrend, weekdays } from "@/lib/data";
+import { aiTrend, conversationTrend, upsellTrend, weekdays } from "@/lib/data";
 import { useCurrentUser } from "@/lib/session";
 import { selectors, useApp } from "@/lib/store";
 import { greeting, money } from "@/lib/utils";
@@ -252,9 +252,9 @@ function ManagerDashboard() {
               <SectionTitle title="This week" hint="Simple numbers, no dashboards to interpret" />
               <Card className="space-y-4">
                 {[
-                  { label: "Conversations", values: conversationTrend, tone: "pine" as const, value: conversations.length || dailyStats.conversationsToday, suffix: "today" },
-                  { label: "AI resolution rate", values: aiTrend, tone: "good" as const, value: `${conversations.length ? Math.round((aiHandled / conversations.length) * 100) : dailyStats.aiResolutionRate}%`, suffix: "of all threads" },
-                  { label: "Upsell revenue", values: upsellTrend, tone: "ai" as const, value: money(upsellTotal || dailyStats.upsellToday), suffix: "accepted today" },
+                  { label: "Conversations", values: conversationTrend, tone: "pine" as const, value: conversations.length, suffix: "today" },
+                  { label: "AI resolution rate", values: aiTrend, tone: "good" as const, value: `${conversations.length ? Math.round((aiHandled / conversations.length) * 100) : 0}%`, suffix: "of all threads" },
+                  { label: "Upsell revenue", values: upsellTrend, tone: "ai" as const, value: money(upsellTotal), suffix: "accepted today" },
                 ].map((row) => (
                   <div key={row.label} className="flex items-center justify-between gap-3 border-t border-line-soft pt-4 first:border-t-0 first:pt-0">
                     <div>

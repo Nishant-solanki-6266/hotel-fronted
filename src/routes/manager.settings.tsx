@@ -732,8 +732,8 @@ function IntegrationsPanel() {
               <div className="rounded-[10px] border border-pine-200 bg-pine-50/60 p-3.5">
                 <div className="flex items-center justify-between">
                   <p className="text-[13.5px] font-semibold text-ink">Mews</p>
-                  <Badge tone="good" dot>
-                    Connected
+                  <Badge tone={integrations.pms.connected ? "good" : "urgent"} dot>
+                    {integrations.pms.connected ? "Connected" : "Not connected"}
                   </Badge>
                 </div>
                 <div className="mt-2 divide-y divide-line-soft">
@@ -790,8 +790,8 @@ function IntegrationsPanel() {
                     <p className="mt-2 text-[13px] font-medium text-ink">{option.label}</p>
                     <p className="text-[11.5px] text-ink-4">{option.note}</p>
                     {active && (
-                      <Badge tone="good" className="mt-2" dot>
-                        Connected
+                      <Badge tone={integrations.email.connected ? "good" : "mute"} className="mt-2" dot>
+                        {integrations.email.connected ? "Connected" : "Not connected"}
                       </Badge>
                     )}
                   </button>

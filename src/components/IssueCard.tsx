@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowUpRight, DoorClosed, MessageCircle, Wrench } from "lucide-react";
-import { assignIssue, setIssueStatus } from "@/lib/store";
+import { assignIssue, setIssueStatus, useApp } from "@/lib/store";
 import { technicians } from "@/lib/data";
 import type { Issue } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, priorityTone, statusTone } from "./ui";
 
 export function IssueCard({ issue, compact }: { issue: Issue; compact?: boolean }) {
+  const users = useApp((s) => s.users);
   const [note, setNote] = useState("");
   const [noting, setNoting] = useState(false);
   const done = issue.status === "Completed";
+  const mtUsers = users.filter((u) => u.role === "maintenance").map((u) => u.name);
+  const techOptions = mtUsers.length > 0 ? mtUsers : technicians;
 
   return (
     <Card pad={false} className={cn("overflow-hidden", issue.priority === "Urgent" && !done && "border-urgent/25")}>
@@ -83,7 +86,7 @@ export function IssueCard({ issue, compact }: { issue: Issue; compact?: boolean 
           {!issue.assignee && (
             <span className="ml-auto flex items-center gap-1.5">
               <AlertTriangle className="size-3 text-attend" />
-              {technicians.map((t) => (
+              {techOptions.map((t) => (
                 <Button key={t} size="sm" variant="outline" onClick={() => assignIssue(issue.id, t)}>
                   {t.split(" ")[0]}
                 </Button>

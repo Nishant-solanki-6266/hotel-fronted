@@ -1,20 +1,9 @@
 import { Store, useStore } from "@tanstack/react-store";
 import { api } from "./api";
 import {
-  aiRules as seedRules,
-  knowledgeDocs,
-  seedActivity,
-  seedConversations,
-  seedIssues,
-  seedRooms,
-  seedTasks,
-  seedUpsells,
-  seedWaThreads,
   hotel,
   planTiers,
-  staff as seedStaff,
-  invoices as seedInvoices,
-  subscription as seedSubscription,
+  subscription as defaultSubscription,
 } from "./data";
 import type {
   ActivityItem,
@@ -192,44 +181,31 @@ function freshOnboarding(): OnboardingState {
   };
 }
 
-const DELETED_KNOWLEDGE_KEY = "hotelogx.deleted_knowledge_docs.v1";
-
-function getInitialKnowledge(): KnowledgeDoc[] {
-  if (typeof window === "undefined") return knowledgeDocs;
-  try {
-    const raw = window.localStorage.getItem(DELETED_KNOWLEDGE_KEY);
-    const deletedIds: string[] = raw ? JSON.parse(raw) : [];
-    return knowledgeDocs.filter((k) => !deletedIds.includes(k.id));
-  } catch {
-    return knowledgeDocs;
-  }
-}
-
 export const store = new Store<AppState>({
-  conversations: seedConversations,
-  tasks: seedTasks,
-  rooms: seedRooms,
-  issues: seedIssues,
-  upsells: seedUpsells,
-  activity: seedActivity,
-  waThreads: seedWaThreads,
-  aiRules: seedRules,
-  knowledge: getInitialKnowledge(),
+  conversations: [],
+  tasks: [],
+  rooms: [],
+  issues: [],
+  upsells: [],
+  activity: [],
+  waThreads: [],
+  aiRules: [],
+  knowledge: [],
   hotelProfile: hotel,
-  users: seedStaff,
-  subscription: seedSubscription,
-  invoices: seedInvoices,
-  onboarding: connectedOnboarding(),
+  users: [],
+  subscription: defaultSubscription,
+  invoices: [],
+  onboarding: freshOnboarding(),
   aiMode: "Autonomous",
   integrations: {
-    pms: { provider: "Mews", connected: true, lastSync: "2 min ago" },
-    email: { provider: "google", account: "reception@hotelmercier.be", connected: true },
+    pms: { provider: "Mews", connected: false, lastSync: "—" },
+    email: { provider: "google", account: "", connected: false },
     whatsapp: {
-      connected: true,
-      number: hotel.whatsappNumber,
-      waba: "Hotel Mercier BV · WABA 1029-4471",
+      connected: false,
+      number: "",
+      waba: "",
       quality: "High",
-      templates: 11,
+      templates: 0,
     },
   },
   toasts: [],
@@ -1042,17 +1018,6 @@ export async function removeKnowledgeDoc(id: string) {
   set((s) => ({ knowledge: s.knowledge.filter((k) => k.id !== id) }));
   toast("Source removed", "attend", doc?.name);
 
-  if (typeof window !== "undefined") {
-    try {
-      const raw = window.localStorage.getItem(DELETED_KNOWLEDGE_KEY);
-      const deletedIds: string[] = raw ? JSON.parse(raw) : [];
-      if (!deletedIds.includes(id)) {
-        deletedIds.push(id);
-        window.localStorage.setItem(DELETED_KNOWLEDGE_KEY, JSON.stringify(deletedIds));
-      }
-    } catch {}
-  }
-
   if (!id.startsWith("k-temp")) {
     try {
       await api.deleteKnowledgeDoc(id);
@@ -1074,6 +1039,7 @@ export async function loadBackendData() {
       upsellsRes,
       activityRes,
       rulesRes,
+      knowledgeRes,
       usersRes,
       subRes,
       invoicesRes,
@@ -1086,6 +1052,7 @@ export async function loadBackendData() {
       api.getUpsells(),
       api.getActivity(),
       api.getAiRules(),
+      api.getKnowledgeDocs(),
       token ? api.getUsers() : Promise.resolve(null),
       token ? api.getSubscription() : Promise.resolve(null),
       token ? api.getInvoices() : Promise.resolve(null),
@@ -1208,6 +1175,20 @@ export async function loadBackendData() {
         }
       }
 
+      if (knowledgeRes.status === "fulfilled" && Array.isArray(knowledgeRes.value)) {
+        updates.knowledge = knowledgeRes.value.map((k: any) => ({
+          id: k.id,
+          name: k.name || k.fileName || "Document",
+          category: (k.category as KnowledgeDoc["category"]) || "Hotel Policies",
+          format: (k.format?.toUpperCase() as KnowledgeDoc["format"]) || "PDF",
+          size: k.size || (k.fileSize ? `${(k.fileSize / 1024).toFixed(1)} KB` : "0 KB"),
+          updated: k.updated || "Just now",
+          status: k.status === "error" ? "Needs Review" : k.status === "indexed" ? "Indexed" : "Processing",
+          aiReady: k.aiReady ?? (k.status === "indexed"),
+          usedToday: k.usedToday || 0,
+        }));
+      }
+
       if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value) && usersRes.value.length > 0) {
         updates.users = usersRes.value;
       }
@@ -1235,29 +1216,21 @@ export async function syncKnowledgeWithBackend() {
   try {
     const serverDocs = await api.getKnowledgeDocs();
     if (serverDocs && Array.isArray(serverDocs)) {
-      const raw = typeof window !== "undefined" ? window.localStorage.getItem(DELETED_KNOWLEDGE_KEY) : null;
-      const deletedIds: string[] = raw ? JSON.parse(raw) : [];
-      
       const mapped: KnowledgeDoc[] = serverDocs.map((s: any) => ({
         id: s.id,
-        name: s.name,
+        name: s.name || s.fileName || "Document",
         category: (s.category as KnowledgeDoc["category"]) || "Hotel Policies",
         format: (s.format?.toUpperCase() as KnowledgeDoc["format"]) || "PDF",
-        size: s.size || "12.4 KB",
+        size: s.size || (s.fileSize ? `${(s.fileSize / 1024).toFixed(1)} KB` : "0 KB"),
         updated: s.updated || "Just now",
         status: s.status === "error" ? "Needs Review" : s.status === "indexed" ? "Indexed" : "Processing",
         aiReady: s.aiReady ?? (s.status === "indexed"),
         usedToday: s.usedToday || 0,
       }));
 
-      set(() => {
-        const seedNonDeleted = knowledgeDocs.filter(
-          (k) => !deletedIds.includes(k.id) && !mapped.some((m) => m.id === k.id || m.name === k.name)
-        );
-        return {
-          knowledge: [...mapped.filter((m) => !deletedIds.includes(m.id)), ...seedNonDeleted],
-        };
-      });
+      set(() => ({
+        knowledge: mapped,
+      }));
     }
   } catch (e) {
     console.warn("Knowledge backend sync notice:", e);
@@ -1509,6 +1482,7 @@ export async function initBackendSync() {
       usersData,
       subData,
       invoicesData,
+      waThreadsData,
     ] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
@@ -1522,18 +1496,19 @@ export async function initBackendSync() {
       api.getUsers(),
       api.getSubscription(),
       api.getInvoices(),
+      api.getWaThreads(),
     ]);
 
-    if (rooms && rooms.length > 0) {
+    if (rooms && Array.isArray(rooms)) {
       set(() => ({ rooms }));
     }
-    if (tasks && tasks.length > 0) {
+    if (tasks && Array.isArray(tasks)) {
       set(() => ({ tasks }));
     }
-    if (issues && issues.length > 0) {
+    if (issues && Array.isArray(issues)) {
       set(() => ({ issues }));
     }
-    if (convs && Array.isArray(convs) && convs.length > 0) {
+    if (convs && Array.isArray(convs)) {
       const normalizedConvs: Conversation[] = convs.map((c: any) => ({
         ...c,
         channels: Array.isArray(c.channels) && c.channels.length > 0 ? c.channels : [c.primaryChannel || "whatsapp"],
@@ -1559,13 +1534,13 @@ export async function initBackendSync() {
       }));
       set(() => ({ conversations: normalizedConvs }));
     }
-    if (upsells && upsells.length > 0) {
+    if (upsells && Array.isArray(upsells)) {
       set(() => ({ upsells }));
     }
-    if (activities && activities.length > 0) {
+    if (activities && Array.isArray(activities)) {
       set(() => ({ activity: activities }));
     }
-    if (usersData && Array.isArray(usersData) && usersData.length > 0) {
+    if (usersData && Array.isArray(usersData)) {
       set(() => ({ users: usersData }));
     }
     if (subData) {
@@ -1574,13 +1549,12 @@ export async function initBackendSync() {
           ...s.subscription,
           ...subData,
         },
-        invoices: subData.invoices && subData.invoices.length > 0 ? subData.invoices : s.invoices,
+        invoices: Array.isArray(subData.invoices) ? subData.invoices : (Array.isArray(invoicesData) ? invoicesData : s.invoices),
       }));
-    }
-    if (invoicesData && Array.isArray(invoicesData) && invoicesData.length > 0) {
+    } else if (invoicesData && Array.isArray(invoicesData)) {
       set(() => ({ invoices: invoicesData }));
     }
-    if (knowledgeData && Array.isArray(knowledgeData) && knowledgeData.length > 0) {
+    if (knowledgeData && Array.isArray(knowledgeData)) {
       const mappedDocs: KnowledgeDoc[] = knowledgeData.map((d: any) => ({
         id: d.id,
         name: d.name || d.fileName || "Document",
@@ -1599,7 +1573,7 @@ export async function initBackendSync() {
         set(() => ({ aiMode: aiRulesData.aiMode }));
       }
       const rawRules = aiRulesData.rules || (Array.isArray(aiRulesData) ? aiRulesData : null);
-      if (rawRules && Array.isArray(rawRules) && rawRules.length > 0) {
+      if (rawRules && Array.isArray(rawRules)) {
         const mappedRules: AiRule[] = rawRules.map((r: any) => ({
           topic: r.topic,
           mode: r.mode === "Autonomous" ? "Autonomous" : r.mode === "Human Approval" ? "Human Approval" : "Always Escalate",
@@ -1609,20 +1583,67 @@ export async function initBackendSync() {
       }
     }
     if (onboardingData) {
+      const pmsDone = Boolean(onboardingData.done?.pms);
+      const emailDone = Boolean(onboardingData.done?.email);
+      const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
+      const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);
+      const waConnected = waGuestDone || waInternalDone;
+
       set((s) => ({
         onboarding: {
           ...s.onboarding,
           waTopology: onboardingData.waTopology || s.onboarding.waTopology,
           complete: onboardingData.complete !== undefined ? onboardingData.complete : s.onboarding.complete,
           done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done } : s.onboarding.done,
+          pms: {
+            ...s.onboarding.pms,
+            state: pmsDone ? "connected" : "not-started",
+            provider: pmsDone ? "Mews" : null,
+          },
+          email: {
+            ...s.onboarding.email,
+            state: emailDone ? "connected" : "not-started",
+            address: onboardingData.hotelProfile?.email || s.hotelProfile.email || "",
+          },
+          waGuest: {
+            ...s.onboarding.waGuest,
+            state: waGuestDone ? "connected" : "not-started",
+            displayPhoneNumber: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || null,
+          },
+          waInternal: {
+            ...s.onboarding.waInternal,
+            state: waInternalDone ? "connected" : "not-started",
+          },
         },
         hotelProfile: (onboardingData.hotelProfile || onboardingData.hotel)
           ? { ...s.hotelProfile, ...(onboardingData.hotelProfile || onboardingData.hotel) }
           : s.hotelProfile,
+        integrations: {
+          pms: {
+            provider: "Mews",
+            connected: pmsDone,
+            lastSync: pmsDone ? "Live" : "Not connected",
+          },
+          email: {
+            provider: "google",
+            account: (onboardingData.hotelProfile?.email || s.hotelProfile.email || ""),
+            connected: emailDone,
+          },
+          whatsapp: {
+            connected: waConnected,
+            number: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || "",
+            waba: waConnected ? "Hotel Mercier BV · WABA Connected" : "",
+            quality: "High",
+            templates: waConnected ? 11 : 0,
+          },
+        },
       }));
     }
+    if (waThreadsData && Array.isArray(waThreadsData)) {
+      set(() => ({ waThreads: waThreadsData }));
+    }
   } catch (err) {
-    console.warn("Backend sync skipped (fallback to seed data)", err);
+    console.warn("Backend sync failed:", err);
   }
 }
 

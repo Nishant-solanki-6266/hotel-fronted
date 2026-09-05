@@ -5,8 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { TaskComposer } from "@/components/TaskComposer";
 import { TaskRow } from "@/components/TaskRow";
 import { Button, Card, Empty, Eyebrow, SectionTitle, StatCard } from "@/components/ui";
-import { assignTask, useApp } from "@/lib/store";
-import { cleaners } from "@/lib/data";
+import { assignTask, selectors, useApp } from "@/lib/store";
 
 export const Route = createFileRoute("/housekeeping/tasks")({
   component: HousekeepingTasks,
@@ -14,6 +13,7 @@ export const Route = createFileRoute("/housekeeping/tasks")({
 
 function HousekeepingTasks() {
   const tasks = useApp((s) => s.tasks.filter((t) => t.department === "Housekeeping"));
+  const teamCleaners = useApp(selectors.housekeepingTeam);
   const [composer, setComposer] = useState(false);
   const open = tasks.filter((t) => t.status !== "Completed");
   const unassigned = open.filter((t) => !t.assignee);
@@ -66,7 +66,7 @@ function HousekeepingTasks() {
                     {t.room && <span className="tnum ml-2 font-mono text-[12px] text-ink-4">{t.room}</span>}
                   </p>
                   <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {cleaners.map((c) => (
+                    {teamCleaners.map((c) => (
                       <Button key={c} size="sm" variant="outline" icon={MessageCircle} onClick={() => assignTask(t.id, c)}>
                         {c.split(" ")[0]}
                       </Button>

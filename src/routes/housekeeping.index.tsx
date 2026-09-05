@@ -3,9 +3,8 @@ import { AlarmClock, ArrowRight, BedDouble, CheckCircle2, Crown, DoorClosed, Log
 import { AppShell } from "@/components/AppShell";
 import { WhatsAppOps } from "@/components/WhatsAppOps";
 import { Badge, Button, Card, Empty, Eyebrow, SectionTitle, StatCard, statusTone } from "@/components/ui";
-import { cleaners } from "@/lib/data";
 import { useCurrentUser } from "@/lib/session";
-import { setRoomStatus, useApp } from "@/lib/store";
+import { selectors, setRoomStatus, useApp } from "@/lib/store";
 import { greeting } from "@/lib/utils";
 
 export const Route = createFileRoute("/housekeeping/")({
@@ -17,6 +16,7 @@ function HousekeepingDashboard() {
   const navigate = useNavigate();
   const rooms = useApp((s) => s.rooms);
   const tasks = useApp((s) => s.tasks);
+  const teamCleaners = useApp(selectors.housekeepingTeam);
 
   const toClean = rooms.filter((r) => r.status === "Dirty");
   const cleaning = rooms.filter((r) => r.status === "Cleaning");
@@ -120,7 +120,7 @@ function HousekeepingDashboard() {
             <section>
               <SectionTitle title="Team today" hint="Rooms assigned per attendant" />
               <div className="grid gap-3 sm:grid-cols-2">
-                {cleaners.map((c) => {
+                {teamCleaners.map((c) => {
                   const assigned = rooms.filter((r) => r.cleaner === c);
                   const done = assigned.filter((r) => r.status === "Clean" || r.status === "Inspected").length;
                   return (

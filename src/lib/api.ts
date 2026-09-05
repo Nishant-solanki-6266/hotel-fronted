@@ -51,10 +51,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  updateTaskStatus: (id: string, status: string, note?: string, via?: string) =>
+  updateTaskStatus: (id: string, status: string, note?: string, via?: string, assignee?: string) =>
     request(`/tasks/${id}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status, note, via }),
+      body: JSON.stringify({ status, note, via, ...(assignee !== undefined ? { assignee } : {}) }),
     }),
 
   // Issues / Maintenance
@@ -68,6 +68,11 @@ export const api = {
     request(`/issues/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status, note, via }),
+    }),
+  assignIssue: (id: string, assignee: string) =>
+    request(`/issues/${id}/assign`, {
+      method: 'PATCH',
+      body: JSON.stringify({ assignee }),
     }),
 
   // Auth

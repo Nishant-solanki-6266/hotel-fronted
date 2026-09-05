@@ -4,8 +4,7 @@ import { Crown, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { WhatsAppOps } from "@/components/WhatsAppOps";
 import { Badge, Button, Card, Empty, Eyebrow, statusTone } from "@/components/ui";
-import { cleaners } from "@/lib/data";
-import { setRoomStatus, useApp } from "@/lib/store";
+import { selectors, setRoomStatus, useApp } from "@/lib/store";
 import type { RoomStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +28,7 @@ const nextStatuses: RoomStatus[] = ["Cleaning", "Clean", "Inspected", "DND", "Gu
 
 function HousekeepingRooms() {
   const rooms = useApp((s) => s.rooms);
+  const teamCleaners = useApp(selectors.housekeepingTeam);
   const [status, setStatus] = useState<RoomStatus | "All">("All");
   const [cleaner, setCleaner] = useState<string>("All");
   const [floor, setFloor] = useState<number | "All">("All");
@@ -84,7 +84,7 @@ function HousekeepingRooms() {
             ))}
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {["All", ...cleaners].map((c) => (
+            {["All", ...teamCleaners].map((c) => (
               <button
                 key={c}
                 onClick={() => setCleaner(c)}

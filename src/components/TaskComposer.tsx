@@ -1,18 +1,11 @@
 import { useState } from "react";
 import { X } from "lucide-react";
-import { cleaners, staff, technicians } from "@/lib/data";
-import { createTask } from "@/lib/store";
+import { createTask, selectors, useApp } from "@/lib/store";
 import type { Department, Priority, TaskSource } from "@/lib/types";
 import { Button, Eyebrow } from "./ui";
 
 const departments: Department[] = ["Front Office", "Housekeeping", "Maintenance", "Guest Request", "VIP", "Billing", "Follow-up"];
 const priorities: Priority[] = ["Urgent", "High", "Normal", "Low"];
-
-function assigneesFor(department: Department) {
-  if (department === "Housekeeping") return cleaners;
-  if (department === "Maintenance") return technicians;
-  return staff.filter((s) => s.role === "front-office" || s.role === "manager").map((s) => s.name);
-}
 
 export function TaskComposer({
   open,
@@ -33,8 +26,24 @@ export function TaskComposer({
   const [assignee, setAssignee] = useState("");
   const [due, setDue] = useState("");
 
+  const hkCleaners = useApp(selectors.housekeepingTeam);
+  const users = useApp((s) => s.users);
+
   if (!open) return null;
-  const options = assigneesFor(department);
+
+  function getDynamicAssignees(dept: Department): string[] {
+    if (dept === "Housekeeping") return hkCleaners;
+    if (dept === "Maintenance") {
+      const techUsers = users
+        .filter((u) => u.role === "maintenance" || u.title?.toLowerCase().includes("tech") || u.title?.toLowerCase().includes("maint"))
+        .map((u) => u.name);
+      return techUsers.length > 0 ? techUsers : ["Peter Janssens", "Milan Novák"];
+    }
+    const deskUsers = users.filter((u) => u.role === "front-office" || u.role === "manager").map((u) => u.name);
+    return deskUsers.length > 0 ? deskUsers : ["Jonas Verhaeghe", "Amélie Duprez", "Thibault Moreau"];
+  }
+
+  const options = getDynamicAssignees(department);
 
   const field = "mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] text-ink outline-none focus:border-pine-400";
   const label = "block text-[11.5px] font-medium text-ink-3";

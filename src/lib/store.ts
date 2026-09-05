@@ -421,7 +421,7 @@ export function acceptUpsell(conversationId: string, label: string, value: strin
 
 /* ----------------------------------------------------------------- tasks -- */
 
-export function createTask(input: {
+export async function createTask(input: {
   title: string;
   detail?: string;
   room?: string;
@@ -432,28 +432,33 @@ export function createTask(input: {
   assignee?: string;
   source: TaskSource;
   conversationId?: string;
-}) {
-  const id = uid("t");
+}): Promise<string | null> {
+  const result = await api.createTask(input);
+  if (!result) {
+    toast("Task could not be created", "urgent", "Server error — please try again");
+    return null;
+  }
+  const serverTask = result as any;
   const task: Task = {
-    id,
-    title: input.title,
-    detail: input.detail,
-    room: input.room,
-    guest: input.guest,
-    department: input.department,
-    priority: input.priority,
-    createdAt: clockNow(),
-    due: input.due,
-    assignee: input.assignee,
-    status: input.assignee ? "Assigned" : "New",
-    source: input.source,
-    conversationId: input.conversationId,
-    trail: [{ at: clockNow(), text: `Created from ${input.source}`, via: input.source.startsWith("Guest") ? "ai" : "dashboard" }],
+    id: serverTask.id,
+    title: serverTask.title,
+    detail: serverTask.detail ?? input.detail,
+    room: serverTask.room ?? input.room,
+    guest: serverTask.guest ?? input.guest,
+    department: (serverTask.department ?? input.department) as Department,
+    priority: (serverTask.priority ?? input.priority) as Priority,
+    createdAt: serverTask.createdAt ?? clockNow(),
+    due: serverTask.due ?? input.due,
+    assignee: serverTask.assignee ?? input.assignee,
+    status: (serverTask.status ?? (input.assignee ? "Assigned" : "New")) as TaskStatus,
+    source: (serverTask.source ?? input.source) as TaskSource,
+    conversationId: serverTask.conversationId ?? input.conversationId,
+    trail: Array.isArray(serverTask.trail) ? serverTask.trail : [],
   };
   set((s) => ({
     tasks: [task, ...s.tasks],
     conversations: input.conversationId
-      ? s.conversations.map((c) => (c.id === input.conversationId ? { ...c, taskIds: [...c.taskIds, id] } : c))
+      ? s.conversations.map((c) => (c.id === input.conversationId ? { ...c, taskIds: [...c.taskIds, task.id] } : c))
       : s.conversations,
   }));
   pushActivity({
@@ -462,8 +467,7 @@ export function createTask(input: {
     meta: input.assignee ? `Sent to ${input.assignee} on WhatsApp` : "Unassigned",
   });
   toast("Task created", "good", `${input.department}${input.assignee ? ` · ${input.assignee}` : ""}`);
-  api.createTask(input);
-  return id;
+  return task.id;
 }
 
 const guestClosingLine: Record<Department, (room?: string) => string> = {
@@ -476,17 +480,29 @@ const guestClosingLine: Record<Department, (room?: string) => string> = {
   "Follow-up": () => "This is now closed on our side — thank you for your patience.",
 };
 
-export function setTaskStatus(taskId: string, status: TaskStatus, note?: string) {
+export async function setTaskStatus(taskId: string, status: TaskStatus, note?: string) {
   const task = store.state.tasks.find((t) => t.id === taskId);
   if (!task) return;
+
+  const result = await api.updateTaskStatus(taskId, status, note, "dashboard");
+  if (!result) {
+    toast(`Failed to update task`, "urgent", "Server error — please try again");
+    return;
+  }
+
+  const serverTask = result as any;
   set((s) => ({
     tasks: s.tasks.map((t) =>
       t.id === taskId
-        ? { ...t, status, trail: [...t.trail, { at: clockNow(), text: note ?? `Status set to ${status}`, via: "dashboard" as const }] }
+        ? {
+            ...t,
+            status: (serverTask.status ?? status) as TaskStatus,
+            trail: Array.isArray(serverTask.trail) ? serverTask.trail : t.trail,
+          }
         : t,
     ),
   }));
-  api.updateTaskStatus(taskId, status, note, "dashboard");
+
   if (status === "Completed") {
     pushActivity({ kind: "task", text: `Completed — ${task.title}${task.room ? ` (${task.room})` : ""}`, meta: task.department });
     if (task.conversationId) {
@@ -506,20 +522,25 @@ export function setTaskStatus(taskId: string, status: TaskStatus, note?: string)
   toast(`Task ${status.toLowerCase()}`, "ai", task.title);
 }
 
-export function assignTask(taskId: string, assignee: string) {
+export async function assignTask(taskId: string, assignee: string) {
+  const result = await api.updateTaskStatus(taskId, "Assigned", `Assigned to ${assignee}`, "whatsapp", assignee);
+  if (!result) {
+    toast(`Failed to assign task`, "urgent", "Server error — please try again");
+    return;
+  }
+  const serverTask = result as any;
   set((s) => ({
     tasks: s.tasks.map((t) =>
       t.id === taskId
         ? {
             ...t,
-            assignee,
-            status: t.status === "New" ? "Assigned" : t.status,
-            trail: [...t.trail, { at: clockNow(), text: `Assigned to ${assignee}, sent on WhatsApp`, via: "whatsapp" as const }],
+            assignee: serverTask.assignee ?? assignee,
+            status: (serverTask.status ?? "Assigned") as TaskStatus,
+            trail: Array.isArray(serverTask.trail) ? serverTask.trail : t.trail,
           }
         : t,
     ),
   }));
-  api.updateTaskStatus(taskId, "Assigned", `Assigned to ${assignee}`, "whatsapp");
   toast(`Sent to ${assignee}`, "good", "Delivered as a WhatsApp task card");
 }
 
@@ -534,31 +555,50 @@ const statusFromButton: Record<string, RoomStatus> = {
   "Maintenance Issue": "Maintenance",
 };
 
-export function setRoomStatus(roomNumber: string, status: RoomStatus, via: "dashboard" | "whatsapp" = "dashboard") {
-  const room = store.state.rooms.find((r) => r.number === roomNumber);
+export async function setRoomStatus(
+  roomNumber: string,
+  status: RoomStatus,
+  viaOrCleaner?: "dashboard" | "whatsapp" | string,
+  cleanerName?: string,
+  noteText?: string,
+) {
+  const isVia = viaOrCleaner === "dashboard" || viaOrCleaner === "whatsapp";
+  const via = isVia ? (viaOrCleaner as "dashboard" | "whatsapp") : "dashboard";
+  const cleaner = !isVia ? viaOrCleaner : cleanerName;
+  const note = noteText;
+
+  // Backend-first: call API, wait for confirmation
+  const result = await api.updateRoomStatus(roomNumber, status, cleaner, note);
+  if (!result) {
+    toast(`Failed to update Room ${roomNumber}`, "urgent", "Server error — status unchanged");
+    return;
+  }
+
+  const serverRoom: Room = (result as any).room ?? (result as any);
+  const completedTaskIds: string[] = (result as any).completedTaskIds ?? [];
+
+  // Update room from server response — not from local assumptions
   set((s) => ({
-    rooms: s.rooms.map((r) => (r.number === roomNumber ? { ...r, status, updatedAt: clockNow() } : r)),
+    rooms: s.rooms.map((r) => (r.number === roomNumber ? { ...r, ...serverRoom } : r)),
+    // Backend completed these tasks in the same transaction — sync them
+    tasks: s.tasks.map((t) =>
+      completedTaskIds.includes(t.id)
+        ? { ...t, status: "Completed" as TaskStatus }
+        : t,
+    ),
   }));
-  api.updateRoomStatus(roomNumber, status);
+
   pushActivity({
     kind: "room",
-    text: `Room ${roomNumber} is now ${status}`,
+    text: `Room ${roomNumber} is now ${status}${cleaner ? ` by ${cleaner}` : ""}`,
     meta: via === "whatsapp" ? "WhatsApp" : "Dashboard",
   });
 
+  // Guest notification for completed tasks (conversation message only — task mutation owned by backend)
   const released = status === "Clean" || status === "Inspected";
-  if (released) {
-    const housekeepingTasks = store.state.tasks.filter(
-      (t) => t.room === roomNumber && t.department === "Housekeeping" && t.status !== "Completed",
-    );
-    housekeepingTasks.forEach((t) => {
-      set((s) => ({
-        tasks: s.tasks.map((x) =>
-          x.id === t.id
-            ? { ...x, status: "Completed" as TaskStatus, trail: [...x.trail, { at: clockNow(), text: "Room released — task closed", via }] }
-            : x,
-        ),
-      }));
+  if (released && completedTaskIds.length > 0) {
+    const completedTasks = store.state.tasks.filter((t) => completedTaskIds.includes(t.id));
+    completedTasks.forEach((t) => {
       if (t.conversationId) {
         appendMessage(t.conversationId, {
           author: "ai",
@@ -569,6 +609,10 @@ export function setRoomStatus(roomNumber: string, status: RoomStatus, via: "dash
         });
       }
     });
+  }
+
+  if (released) {
+    const room = store.state.rooms.find((r) => r.number === roomNumber);
     if (room?.arrivalTime) {
       pushActivity({
         kind: "task",
@@ -586,7 +630,7 @@ export function setRoomStatus(roomNumber: string, status: RoomStatus, via: "dash
 
 /* ---------------------------------------------------------------- issues -- */
 
-export function createIssue(input: {
+export async function createIssue(input: {
   room: string;
   title: string;
   detail?: string;
@@ -594,102 +638,84 @@ export function createIssue(input: {
   reportedBy: string;
   via: string;
   assignee?: string;
-}) {
-  const numbers = store.state.issues.map((i) => Number(i.id.replace("MT-", "")) || 0);
-  const id = `MT-${Math.max(100, ...numbers) + 1}`;
-  const issue: Issue = {
-    id,
-    room: input.room,
-    title: input.title,
-    detail: input.detail,
-    priority: input.priority,
-    reportedBy: input.reportedBy,
-    via: input.via,
-    createdAt: clockNow(),
-    assignee: input.assignee,
-    status: input.assignee ? "Accepted" : "Open",
-    outOfService: input.priority === "Urgent",
-    updates: [{ at: clockNow(), text: `Reported by ${input.reportedBy} — ${input.via}`, via: "whatsapp" }],
-  };
-  set((s) => ({ issues: [issue, ...s.issues] }));
-  pushActivity({ kind: "maintenance", text: `${id} opened — ${input.title} (${input.room})`, meta: input.via });
-  api.createIssue(input);
-  return id;
+}): Promise<string> {
+  try {
+    const serverIssue = await api.createIssue(input);
+    if (!serverIssue) throw new Error("Backend did not return created issue");
+    const issue: Issue = serverIssue as Issue;
+    set((s) => ({ issues: [issue, ...s.issues] }));
+    pushActivity({ kind: "maintenance", text: `${issue.id} opened — ${issue.title} (${issue.room})`, meta: issue.via });
+    toast(`${issue.id} created`, "good", `Room ${issue.room}`);
+    return issue.id;
+  } catch (err) {
+    toast("Could not create issue", "urgent", "Check your connection and try again");
+    console.error("createIssue failed:", err);
+    return "";
+  }
 }
 
-export function setIssueStatus(issueId: string, status: Issue["status"], note?: string) {
+export async function setIssueStatus(issueId: string, status: Issue["status"], note?: string) {
   const issue = store.state.issues.find((i) => i.id === issueId);
   if (!issue) return;
-  set((s) => ({
-    issues: s.issues.map((i) =>
-      i.id === issueId
-        ? {
-            ...i,
-            status,
-            outOfService: status === "Completed" ? false : i.outOfService,
-            updates: [...i.updates, { at: clockNow(), text: note ?? `Status set to ${status}`, via: "dashboard" as const }],
-          }
-        : i,
-    ),
-  }));
-  api.updateIssueStatus(issueId, status, note, "dashboard");
 
-  if (status === "Completed") {
-    const roomExists = store.state.rooms.some((r) => r.number === issue.room);
-    if (roomExists) {
+  try {
+    const serverIssue = await api.updateIssueStatus(issueId, status, note, "dashboard");
+    if (!serverIssue) throw new Error("Backend did not return updated issue");
+
+    const updated = serverIssue as Issue;
+
+    // Backend is authoritative — sync store from server response
+    set((s) => ({
+      issues: s.issues.map((i) => (i.id === issueId ? { ...i, ...updated } : i)),
+    }));
+
+    // If completed: backend transaction already set Room→Dirty and created HK task.
+    // Sync local room state from backend response so all modules see the change.
+    if (status === "Completed") {
       set((s) => ({
         rooms: s.rooms.map((r) =>
-          r.number === issue.room ? { ...r, status: "Dirty" as RoomStatus, updatedAt: clockNow(), note: "Recheck after maintenance" } : r,
+          r.number === issue.room
+            ? { ...r, status: "Dirty" as RoomStatus, updatedAt: clockNow(), note: "Recheck after maintenance" }
+            : r,
+        ),
+        // Mark local Maintenance tasks for this room as Completed
+        tasks: s.tasks.map((t) =>
+          t.room === issue.room && t.department === "Maintenance" && t.status !== "Completed"
+            ? { ...t, status: "Completed" as TaskStatus, trail: [...t.trail, { at: clockNow(), text: `${issueId} completed`, via: "whatsapp" as const }] }
+            : t,
         ),
       }));
-    }
-    store.state.tasks
-      .filter((t) => t.room === issue.room && t.department === "Maintenance" && t.status !== "Completed")
-      .forEach((t) => {
-        set((s) => ({
-          tasks: s.tasks.map((x) =>
-            x.id === t.id
-              ? { ...x, status: "Completed" as TaskStatus, trail: [...x.trail, { at: clockNow(), text: `${issueId} completed`, via: "whatsapp" as const }] }
-              : x,
-          ),
-        }));
-        if (t.conversationId) {
-          appendMessage(t.conversationId, {
-            author: "ai",
-            channel: store.state.conversations.find((c) => c.id === t.conversationId)?.primaryChannel ?? "whatsapp",
-            at: clockNow(),
-            confidence: 0.96,
-            body: `Our technician has finished the work in room ${issue.room}. Please tell me if anything is still not right and I will send someone back.`,
-          });
-        }
+      pushActivity({
+        kind: "maintenance",
+        text: `${issueId} completed — Room ${issue.room} back for HK recheck`,
+        meta: "HK re-inspect task created",
       });
-    pushActivity({
-      kind: "maintenance",
-      text: `${issueId} completed — room ${issue.room} back for a recheck`,
-      meta: "Front Office and Manager updated",
-    });
-    toast(`${issueId} completed`, "good", `Room ${issue.room} sent back to housekeeping for a recheck`);
-    return;
-  }
+      toast(`${issueId} completed`, "good", `Room ${issue.room} sent back to housekeeping for a recheck`);
+      return;
+    }
 
-  pushActivity({ kind: "maintenance", text: `${issueId} — ${status}`, meta: issue.room });
-  toast(`${issueId} — ${status}`, status === "Escalated" ? "urgent" : "attend", note);
+    pushActivity({ kind: "maintenance", text: `${issueId} — ${status}`, meta: issue.room });
+    toast(`${issueId} — ${status}`, status === "Escalated" ? "urgent" : "attend", note);
+  } catch (err) {
+    toast(`Could not update ${issueId}`, "urgent", "Check your connection and try again");
+    console.error("setIssueStatus failed:", err);
+  }
 }
 
-export function assignIssue(issueId: string, assignee: string) {
-  set((s) => ({
-    issues: s.issues.map((i) =>
-      i.id === issueId
-        ? {
-            ...i,
-            assignee,
-            status: i.status === "Open" ? "Accepted" : i.status,
-            updates: [...i.updates, { at: clockNow(), text: `Assigned to ${assignee} on WhatsApp`, via: "whatsapp" as const }],
-          }
-        : i,
-    ),
-  }));
-  toast(`${issueId} sent to ${assignee}`, "good", "WhatsApp ticket delivered");
+export async function assignIssue(issueId: string, assignee: string) {
+  try {
+    const serverIssue = await api.assignIssue(issueId, assignee);
+    if (!serverIssue) throw new Error("Backend did not return updated issue");
+
+    const updated = serverIssue as Issue;
+    set((s) => ({
+      issues: s.issues.map((i) => (i.id === issueId ? { ...i, ...updated } : i)),
+    }));
+    toast(`${issueId} assigned to ${assignee}`, "good", "WhatsApp ticket delivered");
+  } catch (err) {
+    toast(`Could not assign ${issueId}`, "urgent", "Check your connection and try again");
+    console.error("assignIssue failed:", err);
+  }
 }
 
 /* ------------------------------------------------------- whatsapp engine -- */
@@ -715,7 +741,7 @@ function waPush(threadId: string, body: string, buttons?: string[]) {
   }));
 }
 
-export function waChoose(threadId: string, messageId: string, label: string) {
+export async function waChoose(threadId: string, messageId: string, label: string) {
   const thread = store.state.waThreads.find((t) => t.id === threadId);
   const message = thread?.messages.find((m) => m.id === messageId);
   if (!thread || !message || message.chosen) return;
@@ -726,8 +752,8 @@ export function waChoose(threadId: string, messageId: string, label: string) {
     ),
   }));
 
-  const room = roomFromBody(message.body);
-  api.sendWaAction({ threadId, messageId, label, room });
+  const room = roomFromBody(message.body) || (/^\d{3}$/.test(label) ? label : undefined);
+  api.sendWaAction({ threadId, messageId, label, room, staffName: thread.contact });
 
   /* housekeeping ---------------------------------------------------------- */
   if (thread.department === "Housekeeping") {
@@ -749,7 +775,7 @@ export function waChoose(threadId: string, messageId: string, label: string) {
     if (!mapped || !room) return;
 
     if (label === "Maintenance Issue") {
-      setRoomStatus(room, "Maintenance", "whatsapp");
+      await setRoomStatus(room, "Maintenance", "whatsapp");
       const issueId = createIssue({
         room,
         title: "Issue reported during cleaning",
@@ -778,7 +804,7 @@ export function waChoose(threadId: string, messageId: string, label: string) {
       return;
     }
 
-    setRoomStatus(room, mapped, "whatsapp");
+    await setRoomStatus(room, mapped, "whatsapp");
 
     if (label === "Start Cleaning") {
       waPush(threadId, `Room ${room} — cleaning in progress since ${clockNow()}.\n\nWhen you are done:`, [
@@ -808,6 +834,19 @@ export function waChoose(threadId: string, messageId: string, label: string) {
       );
       return;
     }
+    if (label === "Delivered" || label.toLowerCase().includes("delivered") || label === "Done") {
+      const activeTask = store.state.tasks.find(
+        (t) => t.department === "Housekeeping" && t.status !== "Completed" && (room ? t.room === room : true),
+      );
+      if (activeTask) {
+        await setTaskStatus(activeTask.id, "Completed", `Delivered by ${thread.contact} via WhatsApp`);
+      }
+      waPush(
+        threadId,
+        `Thank you ${thread.contact.split(" ")[0]} — delivery confirmed${room ? ` for Room ${room}` : ""}. Guest and front desk notified automatically.`,
+      );
+      return;
+    }
     return;
   }
 
@@ -816,7 +855,7 @@ export function waChoose(threadId: string, messageId: string, label: string) {
     const issue = room ? store.state.issues.find((i) => i.room === room && i.status !== "Completed") : undefined;
 
     if (label === "Accept" && issue) {
-      assignIssue(issue.id, thread.contact);
+      await assignIssue(issue.id, thread.contact);
       waPush(
         threadId,
         `Thank you. ${issue.id} is assigned to you and the guest has been told a technician is on the way.\n\nRoom ${issue.room} — when you have finished:`,
@@ -825,12 +864,12 @@ export function waChoose(threadId: string, messageId: string, label: string) {
       return;
     }
     if (label === "Unable to Handle" && issue) {
-      setIssueStatus(issue.id, "Escalated", `${thread.contact} cannot handle this — external help needed`);
+      await setIssueStatus(issue.id, "Escalated", `${thread.contact} cannot handle this — external help needed`);
       waPush(threadId, `Understood. ${issue.id} has been escalated to the manager and an external technician will be arranged.`);
       return;
     }
     if (label === "Completed" && issue) {
-      setIssueStatus(issue.id, "Completed", `${thread.contact} marked the work complete on WhatsApp`);
+      await setIssueStatus(issue.id, "Completed", `${thread.contact} marked the work complete on WhatsApp`);
       waPush(
         threadId,
         `Thank you. ${issue.id} is closed, room ${issue.room} has gone back to housekeeping for a recheck and the guest has been informed automatically.`,
@@ -838,21 +877,21 @@ export function waChoose(threadId: string, messageId: string, label: string) {
       return;
     }
     if (label === "Parts Required" && issue) {
-      setIssueStatus(issue.id, "Waiting Parts", `${thread.contact} needs parts before the work can continue`);
-      createTask({
+      await setIssueStatus(issue.id, "Waiting Parts", `${thread.contact} needs parts before the work can continue`);
+      await createTask({
         title: `Order parts for ${issue.id} (${issue.room})`,
         detail: issue.title,
         room: issue.room,
         department: "Maintenance",
         priority: "Normal",
         source: "AI Detection",
-        assignee: "Peter Janssens",
+        assignee: thread.contact,
       });
       waPush(threadId, `Noted — ${issue.id} is on hold for parts. A purchase task has been created and reception knows the room stays out of service.`);
       return;
     }
     if (label === "External Technician Required" && issue) {
-      setIssueStatus(issue.id, "Escalated", "External technician required — manager approval needed");
+      await setIssueStatus(issue.id, "Escalated", "External technician required — manager approval needed");
       waPush(threadId, `Understood. ${issue.id} has been escalated for an external technician and the manager can see it on the dashboard.`);
       return;
     }
@@ -1098,21 +1137,18 @@ export async function loadBackendData() {
       const updates: Partial<AppState> = {};
 
       if (roomsRes.status === "fulfilled" && Array.isArray(roomsRes.value) && roomsRes.value.length > 0) {
-        updates.rooms = roomsRes.value.map((r: any) => ({
-          number: r.number || r.id,
-          category: r.category || "Deluxe King",
-          floor: r.floor || 1,
-          status: r.status || "Clean",
-          cleaningType: r.cleaningType || "Stayover",
-          cleaner: r.cleaner || undefined,
-          priority: r.priority || "Normal",
-          arrivalTime: r.arrivalTime || undefined,
+        updates.rooms = roomsRes.value.map((r: any): Room => ({
+          number: r.number,
+          floor: r.floor ?? 1,
+          status: (r.status ?? "Clean") as Room["status"],
+          cleaningType: (r.cleaningType ?? "Departure") as Room["cleaningType"],
+          guestStatus: r.guestStatus ?? "Vacant",
+          arrivalTime: r.arrivalTime ?? undefined,
+          priority: (r.priority ?? "Normal") as Room["priority"],
+          cleaner: r.cleaner ?? undefined,
           vip: Boolean(r.vip),
-          guestName: r.guestName || undefined,
-          guestStatus: r.guestStatus || "Vacant",
-          notes: Array.isArray(r.notes) ? r.notes : [],
-          updatedAt: r.updatedAt || "Just now",
-          earlyCheckIn: Boolean(r.earlyCheckIn),
+          note: r.note ?? undefined,
+          updatedAt: r.updatedAt ?? "--:--",
         }));
       }
 
@@ -1151,19 +1187,22 @@ export async function loadBackendData() {
       }
 
       if (issuesRes.status === "fulfilled" && Array.isArray(issuesRes.value)) {
-        updates.issues = issuesRes.value.map((i: any) => ({
+        updates.issues = issuesRes.value.map((i: any): Issue => ({
           id: i.id,
           room: i.room,
           title: i.title,
-          detail: i.detail || "",
-          priority: i.priority || "Normal",
+          detail: i.detail || undefined,
+          priority: (i.priority || "Normal") as Priority,
           reportedBy: i.reportedBy || "Staff",
-          via: i.via || "whatsapp",
+          via: i.via || "Dashboard",
           createdAt: i.createdAt || "Today",
           assignee: i.assignee || undefined,
-          status: i.status || "Open",
+          // Backend stores initial status as "Reported"; frontend uses "Open"
+          status: (i.status === "Reported" ? "Open" : i.status || "Open") as Issue["status"],
           outOfService: Boolean(i.outOfService),
-          updates: Array.isArray(i.updates) ? i.updates : typeof i.updates === "string" ? JSON.parse(i.updates) : [],
+          updates: Array.isArray(i.updates)
+            ? i.updates.map((u: any) => ({ at: u.at, text: u.text, via: u.via || "dashboard" as const }))
+            : [],
         }));
       }
 
@@ -1484,6 +1523,44 @@ export const selectors = {
   guestRequests: (s: AppState) => s.conversations.filter((c) => c.aiStatus !== "resolved" && c.stage === "in-house"),
   acceptedUpsellTotal: (s: AppState) =>
     s.upsells.filter((u) => u.status === "Accepted").reduce((sum, u) => sum + u.value, 0),
+  housekeepingStats: (s: AppState) => {
+    const toClean = s.rooms.filter((r) => r.status === "Dirty").length;
+    const cleaning = s.rooms.filter((r) => r.status === "Cleaning").length;
+    const cleaned = s.rooms.filter((r) => r.status === "Clean" || r.status === "Inspected").length;
+    const dnd = s.rooms.filter((r) => r.status === "DND" || r.status === "Guest Inside").length;
+    const vip = s.rooms.filter((r) => r.vip).length;
+    const earlyArrivals = s.rooms.filter((r) => r.arrivalTime && r.arrivalTime < "15:00").length;
+    const late = s.rooms.filter(
+      (r) => r.arrivalTime && r.status !== "Clean" && r.status !== "Inspected" && r.arrivalTime < "15:00",
+    ).length;
+    return {
+      total: s.rooms.length,
+      toClean,
+      cleaning,
+      cleaned,
+      dnd,
+      vip,
+      earlyArrivals,
+      late,
+    };
+  },
+  housekeepingTeam: (s: AppState) => {
+    const staffCleaners = s.users
+      .filter(
+        (u) =>
+          u.role === "housekeeping" ||
+          u.title?.toLowerCase().includes("cleaner") ||
+          u.title?.toLowerCase().includes("housekeep"),
+      )
+      .map((u) => u.name);
+    const roomCleaners = s.rooms.map((r) => r.cleaner).filter(Boolean) as string[];
+    const all = Array.from(new Set([...staffCleaners, ...roomCleaners])).filter(Boolean);
+    return all.length > 0 ? all : ["Maria Silva", "Inês Duarte", "Kadir Yılmaz", "Alina Popescu"];
+  },
+  floors: (s: AppState) => {
+    const floorList = Array.from(new Set(s.rooms.map((r) => r.floor))).sort((a, b) => a - b);
+    return floorList.length > 0 ? floorList : [1, 2, 3, 4];
+  },
 };
 
 export async function initBackendSync() {
@@ -1501,6 +1578,7 @@ export async function initBackendSync() {
       usersData,
       subData,
       invoicesData,
+      waThreadsData,
     ] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
@@ -1514,6 +1592,7 @@ export async function initBackendSync() {
       api.getUsers(),
       api.getSubscription(),
       api.getInvoices(),
+      api.getWaThreads(),
     ]);
 
     if (rooms && rooms.length > 0) {
@@ -1524,6 +1603,9 @@ export async function initBackendSync() {
     }
     if (issues && issues.length > 0) {
       set(() => ({ issues }));
+    }
+    if (waThreadsData && Array.isArray(waThreadsData) && waThreadsData.length > 0) {
+      set(() => ({ waThreads: waThreadsData }));
     }
     if (convs && Array.isArray(convs) && convs.length > 0) {
       const normalizedConvs: Conversation[] = convs.map((c: any) => ({
@@ -1620,5 +1702,41 @@ export async function initBackendSync() {
 
 if (typeof window !== "undefined") {
   initBackendSync();
+
+  // Multi-device live sync loop (every 8 seconds)
+  setInterval(async () => {
+    try {
+      const [rooms, tasks, issues, convs, waThreads] = await Promise.all([
+        api.getRooms().catch(() => null),
+        api.getTasks().catch(() => null),
+        api.getIssues().catch(() => null),
+        api.getConversations().catch(() => null),
+        api.getWaThreads().catch(() => null),
+      ]);
+      if (rooms && Array.isArray(rooms) && rooms.length > 0) {
+        set(() => ({ rooms }));
+      }
+      if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+        set(() => ({ tasks }));
+      }
+      if (issues && Array.isArray(issues) && issues.length > 0) {
+        set(() => ({ issues }));
+      }
+      if (waThreads && Array.isArray(waThreads) && waThreads.length > 0) {
+        set(() => ({ waThreads }));
+      }
+      if (convs && Array.isArray(convs) && convs.length > 0) {
+        set((s) => ({
+          conversations: s.conversations.map((c) => {
+            const remote = convs.find((rc: any) => rc.id === c.id);
+            return remote ? { ...c, ...remote, messages: remote.messages || c.messages } : c;
+          }),
+        }));
+      }
+    } catch {
+      // Quiet fail on network flutter
+    }
+  }, 8000);
 }
+
 

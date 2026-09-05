@@ -1,6 +1,35 @@
+import { staff } from './data';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
+async function getOrRefreshToken(): Promise<string | null> {
+  if (typeof localStorage === 'undefined') return null;
+  let token = localStorage.getItem('token');
+  if (token) return token;
+
+  const sessionUserId = localStorage.getItem('hotelogx.session.v1') || 'u-jonas';
+  const foundUser = staff.find((u) => u.id === sessionUserId) || staff[0];
+  if (!foundUser) return null;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: foundUser.email, userId: foundUser.id }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const fetchedToken = json?.data?.token || json?.token;
+      if (fetchedToken) {
+        localStorage.setItem('token', fetchedToken);
+        return fetchedToken;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}, isRetry = false): Promise<T | null> {
   try {
     const url = `${API_BASE_URL}${endpoint}`;
     const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
@@ -9,10 +38,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    // If token is stored in localStorage or default dev token is needed
-    if (typeof localStorage !== 'undefined') {
-      const token = localStorage.getItem('token');
-      if (token && !headers['Authorization']) {
+    if (typeof localStorage !== 'undefined' && !headers['Authorization'] && !endpoint.startsWith('/auth/login')) {
+      const token = await getOrRefreshToken();
+      if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }
     }
@@ -22,8 +50,30 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       headers,
     });
 
+    if (res.status === 401 && !isRetry && !endpoint.startsWith('/auth/login')) {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('token');
+      }
+      const refreshedToken = await getOrRefreshToken();
+      if (refreshedToken) {
+        return request<T>(
+          endpoint,
+          {
+            ...options,
+            headers: {
+              ...headers,
+              Authorization: `Bearer ${refreshedToken}`,
+            },
+          },
+          true,
+        );
+      }
+    }
+
     if (!res.ok) {
-      console.warn(`API request to ${endpoint} returned status ${res.status}`);
+      if (res.status !== 401) {
+        console.warn(`API request to ${endpoint} returned status ${res.status}`);
+      }
       return null;
     }
 

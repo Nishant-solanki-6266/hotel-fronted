@@ -211,7 +211,7 @@ function ManagerDashboard() {
               <Card pad={false}>
                 <ol>
                   {priorities.map((p, i) => (
-                    <li key={p.text} className="flex items-start gap-3 border-t border-line-soft px-4 py-3 first:border-t-0">
+                    <li key={`${p.text}-${i}`} className="flex items-start gap-3 border-t border-line-soft px-4 py-3 first:border-t-0">
                       <span className="tnum mt-px font-mono text-[11px] text-ink-4">{String(i + 1).padStart(2, "0")}</span>
                       <p className="min-w-0 flex-1 text-[13.5px] leading-snug text-ink-2">{p.text}</p>
                       <Badge tone={p.tone}>{p.who}</Badge>

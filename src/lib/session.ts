@@ -16,29 +16,32 @@ export async function hydrateSession() {
   if (typeof window === "undefined") return;
   const stored = window.localStorage.getItem(KEY);
   const found = stored ? staff.find((u) => u.id === stored) : undefined;
-  sessionStore.setState(() => ({ userId: found?.id ?? null, ready: true }));
 
-  if (found && !window.localStorage.getItem("token")) {
-    try {
-      const res = await api.login({ email: found.email, userId: found.id });
-      if (res?.token) {
-        window.localStorage.setItem("token", res.token);
-      }
-    } catch {}
-  }
+  if (found) {
+    let token = window.localStorage.getItem("token");
+    if (!token) {
+      try {
+        const res = await api.login({ email: found.email, userId: found.id });
+        if (res?.token) {
+          window.localStorage.setItem("token", res.token);
+          token = res.token;
+        }
+      } catch {}
+    }
 
-    const token = window.localStorage.getItem("token");
-    if (found && token) {
+    if (token) {
       try {
         const { syncKnowledgeWithBackend } = await import("./store");
         syncKnowledgeWithBackend();
       } catch {}
     }
+  }
+
+  sessionStore.setState(() => ({ userId: found?.id ?? null, ready: true }));
 }
 
 export async function signIn(userId: string) {
   if (typeof window !== "undefined") window.localStorage.setItem(KEY, userId);
-  sessionStore.setState(() => ({ userId, ready: true }));
 
   const found = staff.find((u) => u.id === userId);
   if (found) {
@@ -51,6 +54,8 @@ export async function signIn(userId: string) {
       console.warn("Backend auth token sync skipped:", e);
     }
   }
+
+  sessionStore.setState(() => ({ userId, ready: true }));
 
   try {
     const { syncKnowledgeWithBackend } = await import("./store");

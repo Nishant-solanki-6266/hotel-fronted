@@ -17,7 +17,19 @@ export function WhatsAppOps({ department }: { department?: "Housekeeping" | "Mai
     if (el) el.scrollTop = el.scrollHeight;
   }, [count, thread?.id]);
 
-  if (!thread) return null;
+  if (!thread) {
+    return (
+      <div className="flex h-full min-h-[280px] flex-col items-center justify-center p-6 text-center">
+        <div className="inline-flex size-12 items-center justify-center rounded-full bg-wa/10 text-wa">
+          <Smartphone className="size-6" />
+        </div>
+        <p className="mt-3 font-display text-[15px] font-medium text-ink">WhatsApp Operations Layer</p>
+        <p className="mt-1 max-w-xs text-[12px] text-ink-3">
+          Staff WhatsApp messages and action buttons are loading from your active operational database.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -75,20 +87,23 @@ export function WhatsAppOps({ department }: { department?: "Housekeeping" | "Mai
                 <p className="tnum mt-1 text-right font-mono text-[9.5px] text-[#667781]">{m.at}</p>
                 {m.buttons && m.buttons.length > 0 && (
                   <div className="mt-1.5 flex flex-col gap-px overflow-hidden rounded-[7px] border-t border-[#e9edef]">
-                    {m.buttons.map((b) => (
-                      <button
-                        key={b.label}
-                        disabled={Boolean(m.chosen)}
-                        onClick={() => waChoose(thread.id, m.id, b.label)}
-                        className={cn(
-                          "bg-white py-1.5 text-[12.5px] font-medium text-[#027eb5] transition-colors",
-                          m.chosen === b.label && "text-[#027eb5]/50",
-                          m.chosen ? "cursor-default opacity-55" : "hover:bg-[#f5f6f6]",
-                        )}
-                      >
-                        {b.label}
-                      </button>
-                    ))}
+                    {m.buttons.map((b) => {
+                      const btnLabel = typeof b === "string" ? b : (b as any).label;
+                      return (
+                        <button
+                          key={btnLabel}
+                          disabled={Boolean(m.chosen)}
+                          onClick={() => waChoose(thread.id, m.id, btnLabel)}
+                          className={cn(
+                            "bg-white py-1.5 text-[12.5px] font-medium text-[#027eb5] transition-colors",
+                            m.chosen === btnLabel && "text-[#027eb5]/50",
+                            m.chosen ? "cursor-default opacity-55" : "hover:bg-[#f5f6f6]",
+                          )}
+                        >
+                          {btnLabel}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -1,13 +1,19 @@
 import { useState } from "react";
 import { X } from "lucide-react";
+<<<<<<< HEAD
 import { cleaners, staff, technicians } from "@/lib/data";
 import { createTask, useApp } from "@/lib/store";
 import type { Department, Priority, StaffUser, TaskSource } from "@/lib/types";
+=======
+import { createTask, selectors, useApp } from "@/lib/store";
+import type { Department, Priority, TaskSource } from "@/lib/types";
+>>>>>>> f2e4f40fe2183b8a964b9ceba1525c35f9916179
 import { Button, Eyebrow } from "./ui";
 
 const departments: Department[] = ["Front Office", "Housekeeping", "Maintenance", "Guest Request", "VIP", "Billing", "Follow-up"];
 const priorities: Priority[] = ["Urgent", "High", "Normal", "Low"];
 
+<<<<<<< HEAD
 function assigneesFor(department: Department, users: StaffUser[]) {
   if (department === "Housekeeping") {
     const hk = users.filter((u) => u.role === "housekeeping").map((u) => u.name);
@@ -21,6 +27,8 @@ function assigneesFor(department: Department, users: StaffUser[]) {
   return fo.length > 0 ? fo : staff.filter((s) => s.role === "front-office" || s.role === "manager").map((s) => s.name);
 }
 
+=======
+>>>>>>> f2e4f40fe2183b8a964b9ceba1525c35f9916179
 export function TaskComposer({
   open,
   onClose,
@@ -41,8 +49,28 @@ export function TaskComposer({
   const [assignee, setAssignee] = useState("");
   const [due, setDue] = useState("");
 
+  const hkCleaners = useApp(selectors.housekeepingTeam);
+  const users = useApp((s) => s.users);
+
   if (!open) return null;
+<<<<<<< HEAD
   const options = assigneesFor(department, users);
+=======
+
+  function getDynamicAssignees(dept: Department): string[] {
+    if (dept === "Housekeeping") return hkCleaners;
+    if (dept === "Maintenance") {
+      const techUsers = users
+        .filter((u) => u.role === "maintenance" || u.title?.toLowerCase().includes("tech") || u.title?.toLowerCase().includes("maint"))
+        .map((u) => u.name);
+      return techUsers.length > 0 ? techUsers : ["Peter Janssens", "Milan Novák"];
+    }
+    const deskUsers = users.filter((u) => u.role === "front-office" || u.role === "manager").map((u) => u.name);
+    return deskUsers.length > 0 ? deskUsers : ["Jonas Verhaeghe", "Amélie Duprez", "Thibault Moreau"];
+  }
+
+  const options = getDynamicAssignees(department);
+>>>>>>> f2e4f40fe2183b8a964b9ceba1525c35f9916179
 
   const field = "mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] text-ink outline-none focus:border-pine-400";
   const label = "block text-[11.5px] font-medium text-ink-3";

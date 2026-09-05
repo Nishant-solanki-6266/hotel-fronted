@@ -12,23 +12,28 @@ import type { ActivityItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Eyebrow } from "./ui";
 
-const kindMeta: Record<ActivityItem["kind"], { icon: React.ComponentType<{ className?: string }>; color: string }> = {
+const defaultMeta = { icon: Sparkles, color: "text-ai" };
+
+const kindMeta: Record<string, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
   "ai-reply": { icon: Sparkles, color: "text-ai" },
+  ai: { icon: Sparkles, color: "text-ai" },
   task: { icon: ClipboardList, color: "text-pine-600" },
   escalation: { icon: TriangleAlert, color: "text-urgent" },
   upsell: { icon: ArrowUpRight, color: "text-good" },
   room: { icon: BedDouble, color: "text-attend" },
   maintenance: { icon: Wrench, color: "text-attend" },
   guest: { icon: MessageCircle, color: "text-wa" },
+  issue: { icon: Wrench, color: "text-attend" },
+  status: { icon: BedDouble, color: "text-attend" },
 };
 
 export function ActivityFeed({ limit = 10, compact }: { limit?: number; compact?: boolean }) {
-  const activity = useApp((s) => s.activity);
+  const activity = useApp((s) => s.activity) ?? [];
   return (
     <ol className="relative">
       <span className="absolute top-2 bottom-2 left-[9px] w-px bg-line-soft" aria-hidden />
       {activity.slice(0, limit).map((item) => {
-        const meta = kindMeta[item.kind];
+        const meta = (item && item.kind ? kindMeta[item.kind] : undefined) ?? defaultMeta;
         const Icon = meta.icon;
         return (
           <li key={item.id} className={cn("relative flex gap-3 pl-0", compact ? "py-2" : "py-2.5")}>

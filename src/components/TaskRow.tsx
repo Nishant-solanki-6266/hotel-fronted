@@ -32,13 +32,8 @@ const sourceIcon: Record<string, React.ComponentType<{ className?: string }>> = 
 };
 
 export function TaskRow({ task, onOpen, showDepartment = true }: { task: Task; onOpen?: (task: Task) => void; showDepartment?: boolean }) {
-<<<<<<< HEAD
-  const SourceIcon = (task.source && sourceIcon[task.source]) || Bot;
-  const done = task.status === "Completed";
-=======
   const SourceIcon = (task?.source ? sourceIcon[task.source] : undefined) ?? DefaultSourceIcon;
   const done = task?.status === "Completed";
->>>>>>> 2392a5e8c391566f4faf7adfb7c79660cf64331c
   return (
     <li
       className={cn(

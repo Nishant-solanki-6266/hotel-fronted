@@ -121,6 +121,8 @@ export interface Conversation {
   unread: number;
   lastAt: string;
   aiHandledCount: number;
+  room?: string;
+  reservation?: Reservation;
 }
 
 export interface Task {
@@ -152,6 +154,10 @@ export interface Room {
   updatedAt: string;
   vip: boolean;
   note?: string;
+  notes?: string[];
+  category?: string;
+  guestName?: string;
+  earlyCheckIn?: boolean;
 }
 
 export interface Issue {

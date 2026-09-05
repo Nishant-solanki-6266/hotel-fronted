@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Logo } from "@/components/Logo";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -10,15 +10,20 @@ export const Route = createFileRoute("/onboarding")({
 });
 
 function Onboarding() {
+  const [mounted, setMounted] = useState(false);
   const session = useSession();
   const user = useCurrentUser();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (session.ready && !user) navigate({ to: "/login" });
-  }, [session.ready, user, navigate]);
+    setMounted(true);
+  }, []);
 
-  if (!session.ready || !user) {
+  useEffect(() => {
+    if (mounted && session.ready && !user) navigate({ to: "/login" });
+  }, [mounted, session.ready, user, navigate]);
+
+  if (!mounted || !session.ready || !user) {
     return (
       <div className="grain flex min-h-dvh flex-col items-center justify-center gap-4 bg-paper">
         <Logo size={40} />

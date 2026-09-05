@@ -27,10 +27,13 @@ export async function hydrateSession() {
     } catch {}
   }
 
-  try {
-    const { syncKnowledgeWithBackend } = await import("./store");
-    syncKnowledgeWithBackend();
-  } catch {}
+    const token = window.localStorage.getItem("token");
+    if (found && token) {
+      try {
+        const { syncKnowledgeWithBackend } = await import("./store");
+        syncKnowledgeWithBackend();
+      } catch {}
+    }
 }
 
 export async function signIn(userId: string) {

@@ -4,7 +4,7 @@ import { CheckCircle2, Percent, Send, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Card, ChannelMark, Empty, Eyebrow, SectionTitle, Sparkline, StatCard, statusTone } from "@/components/ui";
 import { channelLabel, useApp } from "@/lib/store";
-import { dailyStats, upsellTrend, weekdays } from "@/lib/data";
+import { upsellTrend, weekdays } from "@/lib/data";
 import type { Upsell } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 

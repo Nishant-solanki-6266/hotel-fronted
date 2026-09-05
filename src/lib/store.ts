@@ -1103,6 +1103,8 @@ export async function removeKnowledgeDoc(id: string) {
 
 export async function loadBackendData() {
   try {
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
+
     const [
       roomsRes,
       tasksRes,
@@ -1110,9 +1112,7 @@ export async function loadBackendData() {
       issuesRes,
       upsellsRes,
       activityRes,
-      briefingRes,
       rulesRes,
-      knowledgeRes,
       usersRes,
       subRes,
       invoicesRes,
@@ -1124,12 +1124,10 @@ export async function loadBackendData() {
       api.getIssues(),
       api.getUpsells(),
       api.getActivity(),
-      api.getBriefing(),
       api.getAiRules(),
-      api.getKnowledgeDocs(),
-      api.getUsers(),
-      api.getSubscription(),
-      api.getInvoices(),
+      token ? api.getUsers() : Promise.resolve(null),
+      token ? api.getSubscription() : Promise.resolve(null),
+      token ? api.getInvoices() : Promise.resolve(null),
       api.getHotelProfile(),
     ]);
 
@@ -1175,10 +1173,20 @@ export async function loadBackendData() {
         updates.conversations = conversationsRes.value.map((c: any) => ({
           id: c.id,
           guest: c.guest || { id: c.guestId || "g-1", name: c.guestName || "Guest", phone: "", email: "", room: c.room, vip: false, language: "en", sentiment: "neutral" },
+          stage: c.stage || "in-house",
+          channels: Array.isArray(c.channels) ? c.channels : [c.primaryChannel || "whatsapp"],
           primaryChannel: c.primaryChannel || "whatsapp",
-          unread: Boolean(c.unread),
+          unread: typeof c.unread === "number" ? c.unread : c.unread ? 1 : 0,
           aiStatus: c.aiStatus || "ai-handling",
+          sentiment: c.sentiment || "neutral",
+          subject: c.subject || "Guest Chat",
+          summary: c.summary || "",
+          suggestedReply: c.suggestedReply || "",
+          knowledgeUsed: Array.isArray(c.knowledgeUsed) ? c.knowledgeUsed : [],
+          upsellIdeas: Array.isArray(c.upsellIdeas) ? c.upsellIdeas : [],
+          taskIds: Array.isArray(c.taskIds) ? c.taskIds : [],
           lastAt: c.lastAt || "Just now",
+          aiHandledCount: typeof c.aiHandledCount === "number" ? c.aiHandledCount : 0,
           room: c.room || undefined,
           reservation: c.reservation || undefined,
           escalation: typeof c.escalation === "string" ? JSON.parse(c.escalation) : c.escalation || undefined,

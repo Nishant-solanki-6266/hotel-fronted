@@ -45,6 +45,11 @@ function HousekeepingRooms() {
     [rooms, status, cleaner, floor],
   );
 
+  const availableCleaners = useMemo(() => {
+    const list = Array.from(new Set(rooms.map((r) => r.cleaner).filter((c): c is string => Boolean(c))));
+    return list.length > 0 ? list : cleaners;
+  }, [rooms]);
+
   const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
 
   return (
@@ -84,7 +89,11 @@ function HousekeepingRooms() {
             ))}
           </div>
           <div className="flex flex-wrap gap-1.5">
+<<<<<<< HEAD
             {["All", ...teamCleaners].map((c) => (
+=======
+            {["All", ...availableCleaners].map((c) => (
+>>>>>>> 5df4cba736cbd85885f29f61e0f3ce0069921423
               <button
                 key={c}
                 onClick={() => setCleaner(c)}

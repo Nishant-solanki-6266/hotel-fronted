@@ -12,7 +12,14 @@ export default defineConfig(({ command }) => ({
     }),
     tailwindcss(),
     command === 'build' ? netlify() : null,
-    tanstackStart(),
+    tanstackStart({
+      spa: {
+        enabled: true,
+        prerender: {
+          outputPath: '/index.html',
+        },
+      },
+    }),
     viteReact(),
   ].filter(Boolean),
 }))

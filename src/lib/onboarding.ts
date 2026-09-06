@@ -82,7 +82,9 @@ export async function detectEmail(email: string): Promise<EmailDetection> {
   const domain = domainFromEmail(email);
 
   try {
-    const response = await fetch(`/api/email-detect?email=${encodeURIComponent(email)}`, {
+    const rawBase = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api").replace(/\/$/, "");
+    const baseUrl = rawBase.startsWith("http") ? rawBase : `https://${rawBase}`;
+    const response = await fetch(`${baseUrl}/email-detect?email=${encodeURIComponent(email)}`, {
       headers: { accept: "application/json" },
     });
     if (!response.ok) throw new Error(String(response.status));

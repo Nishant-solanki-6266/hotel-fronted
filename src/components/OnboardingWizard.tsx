@@ -11,15 +11,21 @@ import { OnboardingProfileStep } from "./OnboardingProfileStep";
 import { OnboardingUsersStep } from "./OnboardingUsersStep";
 import { OnboardingWhatsAppStep } from "./OnboardingWhatsAppStep";
 import { onboardingSteps, stepsForTopology, waTopologyOptions } from "@/lib/onboarding";
-import { completeOnboarding, markOnboardingStep, setWaTopology, useApp } from "@/lib/store";
+import { completeOnboarding, markOnboardingStep, setWaTopology, updateHotelProfile, useApp } from "@/lib/store";
 import { roleHome, useCurrentUser } from "@/lib/session";
-import type { OnboardingStepKey, WaTopology } from "@/lib/types";
+import type { HotelProfile, OnboardingStepKey, WaTopology } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function StepBody({ step }: { step: OnboardingStepKey }) {
+function StepBody({
+  step,
+  onProfileChange,
+}: {
+  step: OnboardingStepKey;
+  onProfileChange?: (draft: HotelProfile) => void;
+}) {
   switch (step) {
     case "profile":
-      return <OnboardingProfileStep />;
+      return <OnboardingProfileStep onDraftChange={onProfileChange} />;
     case "pms":
       return <OnboardingPmsStep />;
     case "email":
@@ -47,6 +53,7 @@ export function OnboardingWizard() {
   const [stage, setStage] = useState<"welcome" | "checklist" | "finish">(onboarding.waTopology ? "checklist" : "welcome");
   const [topology, setTopology] = useState<WaTopology>(onboarding.waTopology ?? "separate");
   const [open, setOpen] = useState<OnboardingStepKey | null>(null);
+  const [profileDraft, setProfileDraft] = useState<HotelProfile | null>(null);
 
   const steps = stepsForTopology(onboarding.waTopology);
   const doneCount = steps.filter((s) => onboarding.done[s.key]).length;
@@ -65,6 +72,9 @@ export function OnboardingWizard() {
 
   const advance = (mark: boolean) => {
     if (!current) return;
+    if (current.key === "profile" && profileDraft) {
+      updateHotelProfile(profileDraft);
+    }
     if (mark) markOnboardingStep(current.key);
     const next = steps[index + 1];
     setOpen(next ? next.key : null);
@@ -274,7 +284,7 @@ export function OnboardingWizard() {
             </div>
 
             <div className="max-h-[70dvh] overflow-y-auto bg-paper p-4 sm:p-5">
-              <StepBody step={current.key} />
+              <StepBody step={current.key} onProfileChange={setProfileDraft} />
             </div>
 
             <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface px-4 py-3 sm:px-5">
@@ -284,6 +294,9 @@ export function OnboardingWizard() {
                 icon={ArrowLeft}
                 disabled={index === 0}
                 onClick={() => {
+                  if (current.key === "profile" && profileDraft) {
+                    updateHotelProfile(profileDraft);
+                  }
                   const prev = steps[index - 1];
                   if (prev) setOpen(prev.key);
                 }}

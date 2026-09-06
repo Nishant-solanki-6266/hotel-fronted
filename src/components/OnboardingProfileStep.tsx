@@ -24,7 +24,7 @@ const fields: { key: ProfileTextKey; label: string; mono?: boolean; placeholder?
 
 const languageOptions = ["Dutch", "French", "English", "German", "Spanish", "Italian"];
 
-export function OnboardingProfileStep() {
+export function OnboardingProfileStep({ onDraftChange }: { onDraftChange?: (draft: HotelProfile) => void } = {}) {
   const profile = useApp((s) => s.hotelProfile);
   const [draft, setDraft] = useState<HotelProfile>(profile);
 
@@ -33,6 +33,7 @@ export function OnboardingProfileStep() {
     setDraft((d) => {
       const copy = { ...d };
       copy[key] = next;
+      onDraftChange?.(copy);
       return copy;
     });
 
@@ -68,7 +69,14 @@ export function OnboardingProfileStep() {
           <input
             value={draft.rooms}
             inputMode="numeric"
-            onChange={(e) => setDraft((d) => ({ ...d, rooms: Number(e.target.value.replace(/\D/g, "")) || 0 }))}
+            onChange={(e) => {
+              const roomsVal = Number(e.target.value.replace(/\D/g, "")) || 0;
+              setDraft((d) => {
+                const copy = { ...d, rooms: roomsVal };
+                onDraftChange?.(copy);
+                return copy;
+              });
+            }}
             className="tnum mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 font-mono text-[12.5px] outline-none focus:border-pine-400"
           />
         </label>
@@ -76,7 +84,14 @@ export function OnboardingProfileStep() {
           <span className="text-[11.5px] font-medium text-ink-3">Rating</span>
           <select
             value={draft.stars}
-            onChange={(e) => setDraft((d) => ({ ...d, stars: Number(e.target.value) }))}
+            onChange={(e) => {
+              const starsVal = Number(e.target.value);
+              setDraft((d) => {
+                const copy = { ...d, stars: starsVal };
+                onDraftChange?.(copy);
+                return copy;
+              });
+            }}
             className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] outline-none focus:border-pine-400"
           >
             {[1, 2, 3, 4, 5].map((n) => (
@@ -99,10 +114,10 @@ export function OnboardingProfileStep() {
                 onClick={() =>
                   setDraft((d) => {
                     const langs = d.languages || [];
-                    return {
-                      ...d,
-                      languages: on ? langs.filter((l) => l !== language) : [...langs, language],
-                    };
+                    const nextLangs = on ? langs.filter((l) => l !== language) : [...langs, language];
+                    const copy = { ...d, languages: nextLangs };
+                    onDraftChange?.(copy);
+                    return copy;
                   })
                 }
                 className={cn(
@@ -125,7 +140,14 @@ export function OnboardingProfileStep() {
         <textarea
           value={draft.description}
           rows={3}
-          onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+          onChange={(e) => {
+            const desc = e.target.value;
+            setDraft((d) => {
+              const copy = { ...d, description: desc };
+              onDraftChange?.(copy);
+              return copy;
+            });
+          }}
           placeholder="A 48-room townhouse hotel five minutes from the station…"
           className="mt-1 w-full resize-none rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] leading-relaxed outline-none focus:border-pine-400"
         />

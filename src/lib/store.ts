@@ -1312,11 +1312,14 @@ export async function connectPms(provider: string, propertyId: string) {
       ...s.onboarding,
       pms: {
         ...s.onboarding.pms,
-        state: "in-progress",
+        state: "connected",
         provider,
         propertyId,
+        propertyName: s.hotelProfile.name,
+        lastSync: "just now",
         error: null,
       },
+      done: { ...s.onboarding.done, pms: true },
     },
   }));
   api.saveOnboardingStep("pms", { provider, propertyId });

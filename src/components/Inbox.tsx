@@ -140,8 +140,8 @@ function ListItem({
     >
       <div className="flex items-center gap-2">
         <ChannelMark channel={conversation.primaryChannel} />
-        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">{conversation.guest.name}</span>
-        {conversation.guest.vip && <Crown className="size-3 shrink-0 text-pine-600" />}
+        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink">{conversation.guest?.name ?? "Guest"}</span>
+        {conversation.guest?.vip && <Crown className="size-3 shrink-0 text-pine-600" />}
         <span className="tnum shrink-0 font-mono text-[10.5px] text-ink-4">{conversation.lastAt}</span>
       </div>
       <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-ink-3">{lastGuestLine(conversation)}</p>
@@ -149,7 +149,7 @@ function ListItem({
         <Badge tone={statusTone(conversation.aiStatus)} dot>
           {aiStatusLabel[conversation.aiStatus]}
         </Badge>
-        {conversation.guest.room && (
+        {conversation.guest?.room && (
           <span className="tnum font-mono text-[10.5px] text-ink-4">{conversation.guest.room}</span>
         )}
         {conversation.unread > 0 && (
@@ -273,13 +273,13 @@ function GuestContext({
       <div className="rounded-[10px] border border-line bg-paper/70 px-3 py-2">
         <Eyebrow>Reservation · from your PMS</Eyebrow>
         <div className="mt-1 divide-y divide-line-soft">
-          <KeyValue label="Number" value={reservation.number} mono />
+          <KeyValue label="Number" value={reservation?.number ?? "—"} mono />
           <KeyValue label="Room" value={guest.room ?? "Not assigned"} mono />
-          <KeyValue label="Stay" value={`${reservation.arrival} → ${reservation.departure}`} />
-          <KeyValue label="Nights" value={`${reservation.nights} · ${reservation.adults}A ${reservation.children}C`} />
-          <KeyValue label="Category" value={reservation.roomType} />
-          <KeyValue label="Rate" value={reservation.rate} />
-          <KeyValue label="Status" value={reservation.status} />
+          <KeyValue label="Stay" value={reservation?.arrival && reservation?.departure ? `${reservation.arrival} → ${reservation.departure}` : "—"} />
+          <KeyValue label="Nights" value={reservation?.nights ? `${reservation.nights} · ${reservation.adults ?? 1}A ${reservation.children ?? 0}C` : "—"} />
+          <KeyValue label="Category" value={reservation?.roomType ?? "—"} />
+          <KeyValue label="Rate" value={reservation?.rate ?? "—"} />
+          <KeyValue label="Status" value={reservation?.status ?? "—"} />
         </div>
       </div>
 
@@ -504,9 +504,9 @@ export function Inbox({ variant, staffName }: { variant: "manager" | "front-offi
       onClose={() => setComposerOpen(false)}
       source="Manager"
       defaults={{
-        title: `Follow up for ${selected.guest.name}`,
-        room: selected.guest.room,
-        guest: selected.guest.name,
+        title: `Follow up for ${selected.guest?.name ?? "Guest"}`,
+        room: selected.guest?.room,
+        guest: selected.guest?.name ?? "Guest",
         conversationId: selected.id,
       }}
     />
@@ -536,8 +536,8 @@ export function Inbox({ variant, staffName }: { variant: "manager" | "front-offi
                 className="grid w-full grid-cols-1 gap-2 border-b border-line-soft px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-paper lg:grid-cols-[1.4fr_0.8fr_0.6fr_2fr_0.9fr_0.7fr_0.5fr] lg:items-center lg:gap-3"
               >
                 <span className="flex items-center gap-2">
-                  <span className="truncate text-[13.5px] font-medium text-ink">{c.guest.name}</span>
-                  {c.guest.vip && <Crown className="size-3 shrink-0 text-pine-600" />}
+                  <span className="truncate text-[13.5px] font-medium text-ink">{c.guest?.name ?? "Guest"}</span>
+                  {c.guest?.vip && <Crown className="size-3 shrink-0 text-pine-600" />}
                   {c.escalation && <TriangleAlert className="size-3.5 shrink-0 text-urgent" />}
                 </span>
                 <span className="tnum font-mono text-[11.5px] text-ink-3">
@@ -587,8 +587,8 @@ export function Inbox({ variant, staffName }: { variant: "manager" | "front-offi
               <p className="text-[14px] font-semibold text-ink">{selected.subject}</p>
               <p className="tnum mt-0.5 flex items-center gap-2 font-mono text-[11px] text-ink-4">
                 <ChannelMark channel={selected.primaryChannel} withLabel />
-                <span className="font-sans">· {selected.guest.name}</span>
-                {selected.guest.room && <span>· room {selected.guest.room}</span>}
+                <span className="font-sans">· {selected.guest?.name ?? "Guest"}</span>
+                {selected.guest?.room && <span>· room {selected.guest.room}</span>}
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -628,9 +628,9 @@ export function Inbox({ variant, staffName }: { variant: "manager" | "front-offi
               <p className="truncate text-[14px] font-semibold text-ink">{selected.subject}</p>
               <p className="tnum mt-0.5 flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-4">
                 <ChannelMark channel={selected.primaryChannel} withLabel />
-                <span className="font-sans">· {selected.guest.name}</span>
-                {selected.guest.room && <span>· room {selected.guest.room}</span>}
-                <span>· {selected.guest.reservation.number}</span>
+                <span className="font-sans">· {selected.guest?.name ?? "Guest"}</span>
+                {selected.guest?.room && <span>· room {selected.guest.room}</span>}
+                {selected.guest?.reservation?.number && <span>· {selected.guest.reservation.number}</span>}
               </p>
             </div>
             <Badge tone={statusTone(selected.aiStatus)} dot>

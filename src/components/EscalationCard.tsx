@@ -26,12 +26,12 @@ export function EscalationCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-[15px] font-semibold text-ink">{conversation.guest.name}</h3>
-            {conversation.guest.room && (
+            {conversation.guest?.room && (
               <span className="tnum rounded-[6px] border border-line bg-surface px-1.5 py-0.5 font-mono text-[11.5px] text-ink-2">
                 Room {conversation.guest.room}
               </span>
             )}
-            {conversation.guest.vip && (
+            {conversation.guest?.vip && (
               <Badge tone="pine">
                 <Crown className="size-3" /> VIP
               </Badge>
@@ -41,7 +41,7 @@ export function EscalationCard({
             </Badge>
           </div>
           <p className="tnum mt-1 flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-4">
-            <span>{conversation.guest.reservation.number}</span>
+            <span>{conversation.guest?.reservation?.number ?? "—"}</span>
             <span className="text-line">|</span>
             <ChannelMark channel={conversation.primaryChannel} withLabel />
             <span className="text-line">|</span>

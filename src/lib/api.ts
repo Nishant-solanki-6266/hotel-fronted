@@ -125,13 +125,30 @@ export const api = {
       body: JSON.stringify({ assignee }),
     }),
 
-  // Auth
+    // Auth
   login: (credentials: { email?: string; password?: string; userId?: string }) =>
     request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     }),
+  registerHotel: (data: { hotelName: string; managerName: string; email: string; password?: string; phone?: string }) =>
+    request<{ token: string; user: any; hotel: any }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   getMe: () => request<any>('/auth/me'),
+
+  // PMS Integration (Mews)
+  connectPms: (provider: string, propertyId: string) =>
+    request<any>('/pms/connect', {
+      method: 'POST',
+      body: JSON.stringify({ provider, propertyId }),
+    }),
+  getPmsStatus: () => request<any>('/pms/status'),
+  syncPms: () =>
+    request<any>('/pms/sync', {
+      method: 'POST',
+    }),
 
   // Conversations / Chat
   getConversations: () => request<any[]>('/conversations'),

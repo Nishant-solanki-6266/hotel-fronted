@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Sparkles, Wand2 } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Sparkles, Wand2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Avatar, Button } from "@/components/ui";
 import { hotel, staff } from "@/lib/data";
 import { roleHome, roleLabel, signIn } from "@/lib/session";
-import { startOnboarding } from "@/lib/store";
+import { startOnboarding, toast } from "@/lib/store";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/login")({
@@ -33,20 +34,48 @@ const steps = [
 
 function Login() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState(staff[0].id);
+  const [selected, setSelected] = useState<string | null>(staff[0].id);
+  const [email, setEmail] = useState(staff[0].email);
+  const [password, setPassword] = useState("demo-access");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
-  const user = staff.find((u) => u.id === selected)!;
 
-  const submit = async () => {
+  const selectedUser = staff.find((u) => u.id === selected);
+
+  const submit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!email.trim()) return;
     setBusy(true);
-    await signIn(user.id);
-    setTimeout(() => navigate({ to: roleHome[user.role] }), 150);
+
+    try {
+      const res = await api.login({ email: email.trim(), password });
+      if (res && res.token && res.user) {
+        window.localStorage.setItem("token", res.token);
+        await signIn(res.user.id, res.user);
+        toast("Signed in successfully", "good", `Welcome, ${res.user.name}`);
+        setTimeout(() => navigate({ to: roleHome[res.user.role as keyof typeof roleHome] || "/manager" }), 150);
+      } else {
+        toast("Sign in failed", "urgent", (res as any)?.message || "Invalid email or password");
+        setBusy(false);
+      }
+    } catch {
+      // Check if it is an offline demo access attempt with valid demo password
+      const isDemo = staff.some((u) => u.email.toLowerCase() === email.trim().toLowerCase());
+      if (isDemo && (password === "demo-access" || !password)) {
+        const found = staff.find((u) => u.email.toLowerCase() === email.trim().toLowerCase())!;
+        await signIn(found.id);
+        setTimeout(() => navigate({ to: roleHome[found.role] }), 150);
+      } else {
+        toast("Sign in failed", "urgent", "Invalid email or password");
+        setBusy(false);
+      }
+    }
   };
 
   // First login for a hotel that has not been set up yet — clears the seeded connections
   // and opens the onboarding wizard as the manager.
   const firstLogin = async () => {
-    const manager = staff.find((u) => u.role === "manager") ?? user;
+    const manager = staff.find((u) => u.role === "manager") ?? staff[0];
     setBusy(true);
     startOnboarding();
     await signIn(manager.id);
@@ -121,7 +150,11 @@ function Login() {
             {staff.map((u) => (
               <button
                 key={u.id}
-                onClick={() => setSelected(u.id)}
+                onClick={() => {
+                  setSelected(u.id);
+                  setEmail(u.email);
+                  setPassword("demo-access");
+                }}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-[11px] border px-3 py-2.5 text-left transition-colors",
                   u.id === selected ? "border-pine-400 bg-pine-50" : "border-line bg-surface hover:border-ink-4",
@@ -144,28 +177,48 @@ function Login() {
             ))}
           </div>
 
-          <div className="mt-5 space-y-2.5">
+          <form onSubmit={submit} className="mt-5 space-y-2.5">
             <label className="block">
               <span className="text-[11.5px] font-medium text-ink-3">Work email</span>
               <input
-                readOnly
-                value={user.email}
-                className="mt-1 w-full rounded-[9px] border border-line bg-paper-2 px-3 py-2 font-mono text-[12.5px] text-ink-2 outline-none"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEmail(val);
+                  const found = staff.find((u) => u.email.toLowerCase() === val.trim().toLowerCase());
+                  setSelected(found ? found.id : null);
+                }}
+                placeholder="manager@hotelmercier.be"
+                className="mt-1 w-full rounded-[9px] border border-line bg-surface px-3 py-2 font-mono text-[12.5px] text-ink outline-none focus:border-pine-400"
               />
             </label>
             <label className="block">
               <span className="text-[11.5px] font-medium text-ink-3">Password</span>
-              <input
-                type="password"
-                defaultValue="demo-access"
-                className="mt-1 w-full rounded-[9px] border border-line bg-surface px-3 py-2 text-[13px] text-ink outline-none focus:border-pine-400"
-              />
+              <div className="relative mt-1">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••"
+                  className="w-full rounded-[9px] border border-line bg-surface px-3 py-2 pr-9 text-[13px] text-ink outline-none focus:border-pine-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  tabIndex={-1}
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-4 transition-colors hover:text-ink"
+                  title={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
             </label>
-          </div>
 
-          <Button className="mt-5 w-full" onClick={submit} disabled={busy} icon={ArrowRight}>
-            {busy ? "Opening…" : `Sign in as ${user.name.split(" ")[0]}`}
-          </Button>
+            <Button type="submit" className="mt-5 w-full" disabled={busy || !email.trim()} icon={ArrowRight}>
+              {busy ? "Opening…" : selectedUser ? `Sign in as ${selectedUser.name.split(" ")[0]}` : "Sign In"}
+            </Button>
+          </form>
 
           <p className="mt-4 text-[11.5px] leading-snug text-ink-4">
             Demo accounts — pick any of the five to see that role's workspace. A manager can invite colleagues and change

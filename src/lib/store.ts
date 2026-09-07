@@ -1306,24 +1306,103 @@ export function setWaTopology(waTopology: WaTopology) {
   api.saveTopology(waTopology);
 }
 
-export async function connectPms(provider: string, propertyId: string) {
-  set((s) => ({
-    onboarding: {
-      ...s.onboarding,
-      pms: {
-        ...s.onboarding.pms,
-        state: "connected",
-        provider,
-        propertyId,
-        propertyName: s.hotelProfile.name,
-        lastSync: "just now",
-        error: null,
+export async function connectPms(provider: string, propertyId: string): Promise<boolean> {
+  try {
+    const res = await api.connectPms(provider, propertyId);
+    if (res && (res.success || res.status === "connected")) {
+      set((s) => ({
+        onboarding: {
+          ...s.onboarding,
+          pms: {
+            ...s.onboarding.pms,
+            state: "connected",
+            provider: res.provider || provider,
+            propertyId: res.propertyId || propertyId,
+            propertyName: res.propertyName || s.hotelProfile.name,
+            lastSync: res.lastSyncAt ? "Live" : "just now",
+            error: null,
+          },
+          done: { ...s.onboarding.done, pms: true },
+        },
+        integrations: {
+          ...s.integrations,
+          pms: {
+            provider: res.provider || provider,
+            connected: true,
+            lastSync: res.lastSyncAt ? "Live" : "just now",
+          },
+        },
+      }));
+      api.saveOnboardingStep("pms", { provider, propertyId });
+      toast(`${provider} connected`, "good", `Validated enterprise: ${res.propertyName || propertyId}`);
+      return true;
+    } else {
+      const errorMsg = (res as any)?.message || "Could not validate Mews credentials against Mews API";
+      set((s) => ({
+        onboarding: {
+          ...s.onboarding,
+          pms: {
+            ...s.onboarding.pms,
+            state: "error",
+            error: errorMsg,
+          },
+        },
+        integrations: {
+          ...s.integrations,
+          pms: {
+            ...s.integrations.pms,
+            connected: false,
+          },
+        },
+      }));
+      toast("Mews connection failed", "urgent", errorMsg);
+      return false;
+    }
+  } catch (err: any) {
+    const errorMsg = err?.message || "Mews connection error";
+    set((s) => ({
+      onboarding: {
+        ...s.onboarding,
+        pms: {
+          ...s.onboarding.pms,
+          state: "error",
+          error: errorMsg,
+        },
       },
-      done: { ...s.onboarding.done, pms: true },
-    },
-  }));
-  api.saveOnboardingStep("pms", { provider, propertyId });
-  toast(`${provider} connected`, "good", "Read-only — availability, rates and arrivals");
+    }));
+    toast("Mews connection failed", "urgent", errorMsg);
+    return false;
+  }
+}
+
+export async function syncPmsWithBackend() {
+  toast("Starting PMS sync…", "ai", "Communicating with Mews Connector API");
+  try {
+    const res = await api.syncPms();
+    if (res && res.success) {
+      const [rooms, tasks, issues, convs] = await Promise.all([
+        api.getRooms().catch(() => null),
+        api.getTasks().catch(() => null),
+        api.getIssues().catch(() => null),
+        api.getConversations().catch(() => null),
+      ]);
+      if (rooms && Array.isArray(rooms)) set(() => ({ rooms }));
+      if (tasks && Array.isArray(tasks)) set(() => ({ tasks }));
+      if (issues && Array.isArray(issues)) set(() => ({ issues }));
+      if (convs && Array.isArray(convs)) set(() => ({ conversations: convs }));
+
+      const countRooms = res.synced?.rooms ?? 0;
+      const countRes = res.synced?.reservations ?? 0;
+      toast("Synced with Mews", "good", `${countRooms} rooms & ${countRes} reservations updated`);
+      return res;
+    } else {
+      toast("PMS sync failed", "urgent", res?.message || "Failed to sync data from Mews API");
+      return null;
+    }
+  } catch (err: any) {
+    toast("PMS sync failed", "urgent", err?.message || "PMS synchronization error");
+    return null;
+  }
 }
 
 /**
@@ -1563,6 +1642,7 @@ export async function initBackendSync() {
       subData,
       invoicesData,
       waThreadsData,
+      pmsStatusData,
     ] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
@@ -1577,6 +1657,7 @@ export async function initBackendSync() {
       api.getSubscription(),
       api.getInvoices(),
       api.getWaThreads(),
+      api.getPmsStatus().catch(() => null),
     ]);
 
     if (rooms && Array.isArray(rooms)) {
@@ -1666,7 +1747,7 @@ export async function initBackendSync() {
       }
     }
     if (onboardingData) {
-      const pmsDone = Boolean(onboardingData.done?.pms);
+      const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
       const emailDone = Boolean(onboardingData.done?.email);
       const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
       const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);
@@ -1677,11 +1758,13 @@ export async function initBackendSync() {
           ...s.onboarding,
           waTopology: onboardingData.waTopology || s.onboarding.waTopology,
           complete: onboardingData.complete !== undefined ? onboardingData.complete : s.onboarding.complete,
-          done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done } : s.onboarding.done,
+          done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done, pms: isPmsActuallyConnected } : s.onboarding.done,
           pms: {
             ...s.onboarding.pms,
-            state: pmsDone ? "connected" : "not-started",
-            provider: pmsDone ? "Mews" : null,
+            state: isPmsActuallyConnected ? "connected" : "not-started",
+            provider: isPmsActuallyConnected ? (pmsStatusData?.provider || "Mews") : null,
+            propertyId: pmsStatusData?.propertyId || s.onboarding.pms.propertyId,
+            lastSync: pmsStatusData?.lastSyncAt || (isPmsActuallyConnected ? "Live" : null),
           },
           email: {
             ...s.onboarding.email,
@@ -1703,9 +1786,9 @@ export async function initBackendSync() {
           : s.hotelProfile,
         integrations: {
           pms: {
-            provider: "Mews",
-            connected: pmsDone,
-            lastSync: pmsDone ? "Live" : "Not connected",
+            provider: pmsStatusData?.provider || "Mews",
+            connected: isPmsActuallyConnected,
+            lastSync: pmsStatusData?.lastSyncAt ? "Live" : isPmsActuallyConnected ? "Live" : "Not connected",
           },
           email: {
             provider: "google",
@@ -1715,7 +1798,7 @@ export async function initBackendSync() {
           whatsapp: {
             connected: waConnected,
             number: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || "",
-            waba: waConnected ? "Hotel Mercier BV · WABA Connected" : "",
+            waba: waConnected ? `${s.hotelProfile.legalName || 'Hotel'} · WABA Connected` : "",
             quality: "High",
             templates: waConnected ? 11 : 0,
           },

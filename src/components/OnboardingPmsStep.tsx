@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Server, Shield } from "lucide-react";
+import { Loader2, RefreshCw, Server, Shield, AlertCircle } from "lucide-react";
 import { pmsOptions } from "@/lib/onboarding";
-import { connectPms, useApp } from "@/lib/store";
+import { connectPms, syncPmsWithBackend, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, Eyebrow, SectionTitle } from "./ui";
 import { ConnectionHealth } from "./ConnectionHealth";
@@ -14,8 +14,23 @@ export function OnboardingPmsStep() {
   const [choice, setChoice] = useState<string>(pms.provider?.toLowerCase() ?? "mews");
   const [propertyId, setPropertyId] = useState(pms.propertyId ?? "");
   const [consent, setConsent] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const option = pmsOptions.find((p) => p.key === choice) ?? pmsOptions[0];
+
+  const handleAllowConsent = async () => {
+    setConsent(false);
+    setValidating(true);
+    await connectPms(option.name, propertyId.trim());
+    setValidating(false);
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    await syncPmsWithBackend();
+    setSyncing(false);
+  };
 
   if (pms.state === "connected") {
     return (
@@ -32,9 +47,14 @@ export function OnboardingPmsStep() {
             { label: "Last sync", value: pms.lastSync ?? "—" },
           ]}
         />
+        <div className="mt-4 flex items-center gap-2">
+          <Button size="sm" variant="outline" icon={syncing ? Loader2 : RefreshCw} disabled={syncing} onClick={handleSyncNow}>
+            {syncing ? "Syncing with Mews…" : "Test PMS Sync Now"}
+          </Button>
+        </div>
         <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[11.5px] leading-snug text-ink-4">
           <Shield className="mt-px size-3.5 shrink-0 text-pine-600" />
-          Read-only, and it stays that way. Hotelogx never creates, changes or cancels a reservation and never takes payment.
+          Read-only connection active. Hotelogx checks availability and rates directly from {pms.provider}.
         </p>
       </Card>
     );
@@ -70,6 +90,16 @@ export function OnboardingPmsStep() {
           })}
         </div>
 
+        {pms.error && (
+          <div className="mt-4 flex items-start gap-2 rounded-[10px] border border-urgent/30 bg-urgent-bg/30 p-3 text-[12.5px] text-urgent">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <div>
+              <p className="font-medium">Mews validation error</p>
+              <p className="mt-0.5 text-[11.5px] text-ink-3">{pms.error}</p>
+            </div>
+          </div>
+        )}
+
         {option.available ? (
           <div className="mt-4 rounded-[10px] border border-line bg-paper/50 p-3.5">
             <Eyebrow>Identify the property</Eyebrow>
@@ -84,31 +114,29 @@ export function OnboardingPmsStep() {
               </label>
               <label className="block">
                 <span className="text-[11.5px] font-medium text-ink-3">
-                  {option.key === "mews" ? "Mews property ID" : "Property or account ID"}
+                  {option.key === "mews" ? "Mews Property / Access Token" : "Property or account ID"}
                 </span>
                 <input
                   value={propertyId}
                   onChange={(e) => setPropertyId(e.target.value)}
-                  placeholder={option.key === "mews" ? "MEWS-0000-NAME" : "property-id"}
+                  placeholder={option.key === "mews" ? "E01234-MEWS-TOKEN" : "property-id"}
                   className="tnum mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 font-mono text-[12.5px] outline-none focus:border-pine-400"
                 />
               </label>
             </div>
-            <Button className="mt-3" disabled={propertyId.trim().length < 4} onClick={() => setConsent(true)}>
-              Authorise {option.name}
+            <Button className="mt-3" disabled={propertyId.trim().length < 4 || validating} icon={validating ? Loader2 : undefined} onClick={() => setConsent(true)}>
+              {validating ? "Validating with Mews API…" : `Authorise ${option.name}`}
             </Button>
             <p className="mt-2.5 flex items-start gap-1.5 text-[11.5px] leading-snug text-ink-4">
               <Shield className="mt-px size-3.5 shrink-0 text-pine-600" />
-              You approve read-only access in {option.name}. We never ask you to paste an API key into this page — if your
-              PMS needs one, we send a single-use secure link instead.
+              We validate the connection directly against the official Mews Connector API.
             </p>
           </div>
         ) : (
           <div className="mt-4 rounded-[10px] border border-attend/30 bg-attend-bg/40 p-3.5">
             <p className="text-[13px] font-medium text-ink">{option.name} is not connected yet.</p>
             <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
-              Tell us you need it and it moves up the queue. You can finish setup now and connect the PMS later — the AI will
-              answer everything except live availability and rates.
+              Tell us you need it and it moves up the queue. You can finish setup now and connect the PMS later.
             </p>
             <Button
               className="mt-2.5"
@@ -130,10 +158,7 @@ export function OnboardingPmsStep() {
           account={`${profile.name} · ${propertyId}`}
           scopes={["Read availability and rates", "Read reservations and arrivals", "Read folios for billing questions", "No write access of any kind"]}
           onCancel={() => setConsent(false)}
-          onAllow={() => {
-            setConsent(false);
-            connectPms(option.name, propertyId.trim());
-          }}
+          onAllow={handleAllowConsent}
         />
       )}
     </>

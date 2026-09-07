@@ -51,6 +51,7 @@ import {
   setEmailProvider,
   setPlan,
   startOnboarding,
+  syncPmsWithBackend,
   toast,
   toggleWhatsApp,
   updateHotelProfile,
@@ -742,7 +743,7 @@ function IntegrationsPanel() {
                   <KeyValue label="Reads" value="Availability, rates, reservations, folios" />
                   <KeyValue label="Writes" value="Nothing — read only" />
                 </div>
-                <Button size="sm" variant="outline" className="mt-3 w-full" icon={RefreshCw} onClick={() => toast("Synced with Mews", "good", "Availability and arrivals refreshed")}>
+                <Button size="sm" variant="outline" className="mt-3 w-full" icon={RefreshCw} onClick={() => syncPmsWithBackend()}>
                   Sync now
                 </Button>
               </div>

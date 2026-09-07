@@ -296,12 +296,12 @@ export function sendReply(conversationId: string, body: string, as: "ai" | "staf
     conversations: s.conversations.map((c) =>
       c.id === conversationId
         ? {
-            ...c,
-            unread: 0,
-            escalation: undefined,
-            aiStatus: as === "ai" ? "ai-handling" : c.aiStatus === "escalated" ? "human-takeover" : c.aiStatus,
-            aiHandledCount: as === "ai" ? c.aiHandledCount + 1 : c.aiHandledCount,
-          }
+          ...c,
+          unread: 0,
+          escalation: undefined,
+          aiStatus: as === "ai" ? "ai-handling" : c.aiStatus === "escalated" ? "human-takeover" : c.aiStatus,
+          aiHandledCount: as === "ai" ? c.aiHandledCount + 1 : c.aiHandledCount,
+        }
         : c,
     ),
   }));
@@ -327,15 +327,15 @@ export function escalateConversation(conversationId: string, reason: string) {
     conversations: s.conversations.map((c) =>
       c.id === conversationId
         ? {
-            ...c,
-            aiStatus: "escalated",
-            escalation: {
-              reason,
-              urgency: "High",
-              suggested: c.suggestedReply || "Review the thread and reply personally.",
-              raisedAt: clockNow(),
-            },
-          }
+          ...c,
+          aiStatus: "escalated",
+          escalation: {
+            reason,
+            urgency: "High",
+            suggested: c.suggestedReply || "Review the thread and reply personally.",
+            raisedAt: clockNow(),
+          },
+        }
         : c,
     ),
   }));
@@ -472,10 +472,10 @@ export async function setTaskStatus(taskId: string, status: TaskStatus, note?: s
     tasks: s.tasks.map((t) =>
       t.id === taskId
         ? {
-            ...t,
-            status: (serverTask.status ?? status) as TaskStatus,
-            trail: Array.isArray(serverTask.trail) ? serverTask.trail : t.trail,
-          }
+          ...t,
+          status: (serverTask.status ?? status) as TaskStatus,
+          trail: Array.isArray(serverTask.trail) ? serverTask.trail : t.trail,
+        }
         : t,
     ),
   }));
@@ -510,11 +510,11 @@ export async function assignTask(taskId: string, assignee: string) {
     tasks: s.tasks.map((t) =>
       t.id === taskId
         ? {
-            ...t,
-            assignee: serverTask.assignee ?? assignee,
-            status: (serverTask.status ?? "Assigned") as TaskStatus,
-            trail: Array.isArray(serverTask.trail) ? serverTask.trail : t.trail,
-          }
+          ...t,
+          assignee: serverTask.assignee ?? assignee,
+          status: (serverTask.status ?? "Assigned") as TaskStatus,
+          trail: Array.isArray(serverTask.trail) ? serverTask.trail : t.trail,
+        }
         : t,
     ),
   }));
@@ -616,10 +616,10 @@ export function applyPmsLiveUpdate(eventType: string, data: any) {
       rooms: s.rooms.map((r) =>
         r.number === roomNum
           ? {
-              ...r,
-              status,
-              updatedAt: data.time || "just now",
-            }
+            ...r,
+            status,
+            updatedAt: data.time || "just now",
+          }
           : r,
       ),
     }));
@@ -630,12 +630,12 @@ export function applyPmsLiveUpdate(eventType: string, data: any) {
       rooms: s.rooms.map((r) =>
         r.number === roomNum
           ? {
-              ...r,
-              guest: data.isCheckOut ? null : data.guestName || r.guest,
-              guestStatus: data.isCheckIn ? "Occupied" : data.isCheckOut ? "Vacant" : r.guestStatus,
-              status: data.isCheckOut ? "Dirty" : r.status,
-              updatedAt: data.time || "just now",
-            }
+            ...r,
+            guest: data.isCheckOut ? null : data.guestName || r.guest,
+            guestStatus: data.isCheckIn ? "Occupied" : data.isCheckOut ? "Vacant" : r.guestStatus,
+            status: data.isCheckOut ? "Dirty" : r.status,
+            updatedAt: data.time || "just now",
+          }
           : r,
       ),
     }));
@@ -834,12 +834,12 @@ function waPush(threadId: string, body: string, buttons?: string[]) {
     waThreads: s.waThreads.map((t) =>
       t.id === threadId
         ? {
-            ...t,
-            messages: [
-              ...t.messages,
-              { id: uid("wa"), from: "hotelogx" as const, at: clockNow(), body, buttons: buttons?.map((label) => ({ label })) },
-            ],
-          }
+          ...t,
+          messages: [
+            ...t.messages,
+            { id: uid("wa"), from: "hotelogx" as const, at: clockNow(), body, buttons: buttons?.map((label) => ({ label })) },
+          ],
+        }
         : t,
     ),
   }));
@@ -923,8 +923,7 @@ export async function waChoose(threadId: string, messageId: string, label: strin
       const next = store.state.rooms.find((r) => r.status === "Dirty" && r.cleaner === thread.contact);
       waPush(
         threadId,
-        `Thank you. ${room} is released${target?.arrivalTime ? ` and reception has been told it is ready for the ${target.arrivalTime} arrival` : " and the dashboards are updated"}.${
-          next ? `\n\nNext room: ${next.number} — ${next.cleaningType}${next.arrivalTime ? `, arrival ${next.arrivalTime}` : ""}.` : "\n\nThat is your list finished — thank you."
+        `Thank you. ${room} is released${target?.arrivalTime ? ` and reception has been told it is ready for the ${target.arrivalTime} arrival` : " and the dashboards are updated"}.${next ? `\n\nNext room: ${next.number} — ${next.cleaningType}${next.arrivalTime ? `, arrival ${next.arrivalTime}` : ""}.` : "\n\nThat is your list finished — thank you."
         }`,
         next ? ["Start Cleaning", "Guest Inside", "DND", "Maintenance Issue"] : undefined,
       );
@@ -1171,10 +1170,10 @@ export function addKnowledgeDoc(name: string, category: KnowledgeDoc["category"]
   const mimeType = name.endsWith(".csv")
     ? "text/csv"
     : name.endsWith(".docx")
-    ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    : name.endsWith(".pdf")
-    ? "application/pdf"
-    : "text/plain";
+      ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      : name.endsWith(".pdf")
+        ? "application/pdf"
+        : "text/plain";
   const blob = new Blob([`Knowledge base document content for ${name}\nGenerated policies and hotel rules.`], { type: mimeType });
   const file = new File([blob], name, { type: mimeType });
   return uploadKnowledgeDoc(file, category);
@@ -1614,19 +1613,19 @@ export async function initBackendSync() {
       pmsStatusData,
       hotelProfileData,
     ] = await Promise.all([
-      api.getRooms(),
-      api.getTasks(),
-      api.getIssues(),
-      api.getConversations(),
-      api.getUpsells(),
-      api.getActivity(),
-      api.getOnboarding(),
-      api.getKnowledgeDocs(),
-      api.getAiRules(),
-      api.getUsers(),
-      api.getSubscription(),
-      api.getInvoices(),
-      api.getWaThreads(),
+      api.getRooms().catch(() => null),
+      api.getTasks().catch(() => null),
+      api.getIssues().catch(() => null),
+      api.getConversations().catch(() => null),
+      api.getUpsells().catch(() => null),
+      api.getActivity().catch(() => null),
+      api.getOnboarding().catch(() => null),
+      api.getKnowledgeDocs().catch(() => null),
+      api.getAiRules().catch(() => null),
+      api.getUsers().catch(() => null),
+      api.getSubscription().catch(() => null),
+      api.getInvoices().catch(() => null),
+      api.getWaThreads().catch(() => null),
       api.getPmsStatus().catch(() => null),
       api.getHotelProfile().catch(() => null),
     ]);
@@ -1795,7 +1794,7 @@ if (typeof window !== "undefined") {
   // Multi-device live sync loop (every 8 seconds)
   setInterval(async () => {
     try {
-      const [rooms, tasks, issues, convs, waThreads, users, profile] = await Promise.all([
+      const [rooms, tasks, issues, convs, waThreads, users, profile, upsellsData] = await Promise.all([
         api.getRooms().catch(() => null),
         api.getTasks().catch(() => null),
         api.getIssues().catch(() => null),
@@ -1803,6 +1802,7 @@ if (typeof window !== "undefined") {
         api.getWaThreads().catch(() => null),
         api.getUsers().catch(() => null),
         api.getHotelProfile().catch(() => null),
+        api.getUpsells().catch(() => null),
       ]);
       if (profile) {
         set((s) => ({ hotelProfile: { ...s.hotelProfile, ...profile } }));
@@ -1815,6 +1815,9 @@ if (typeof window !== "undefined") {
       }
       if (issues && Array.isArray(issues)) {
         set(() => ({ issues }));
+      }
+      if (upsellsData && Array.isArray(upsellsData)) {
+        set(() => ({ upsells: upsellsData }));
       }
       if (users && Array.isArray(users) && users.length > 0) {
         set(() => ({ users }));

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Eye, EyeOff, Sparkles, Wand2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Eye, EyeOff, Sparkles, Wand2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Avatar, Button } from "@/components/ui";
 import { hotel, staff } from "@/lib/data";
@@ -38,13 +38,18 @@ function Login() {
   const [email, setEmail] = useState(staff[0].email);
   const [password, setPassword] = useState("demo-access");
   const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const selectedUser = staff.find((u) => u.id === selected);
 
   const submit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim()) {
+      setError("Please enter your work email.");
+      return;
+    }
+    setError(null);
     setBusy(true);
 
     try {
@@ -55,7 +60,9 @@ function Login() {
         toast("Signed in successfully", "good", `Welcome, ${res.user.name}`);
         setTimeout(() => navigate({ to: roleHome[res.user.role as keyof typeof roleHome] || "/manager" }), 150);
       } else {
-        toast("Sign in failed", "urgent", (res as any)?.message || "Invalid email or password");
+        const msg = (res as any)?.message || "Invalid email or password.";
+        setError(msg);
+        toast("Sign in failed", "urgent", msg);
         setBusy(false);
       }
     } catch {
@@ -66,6 +73,7 @@ function Login() {
         await signIn(found.id);
         setTimeout(() => navigate({ to: roleHome[found.role] }), 150);
       } else {
+        setError("Invalid email or password.");
         toast("Sign in failed", "urgent", "Invalid email or password");
         setBusy(false);
       }
@@ -178,6 +186,13 @@ function Login() {
           </div>
 
           <form onSubmit={submit} className="mt-5 space-y-2.5">
+            {error && (
+              <div className="flex items-center gap-2 rounded-[9px] border border-urgent-line bg-urgent-bg/80 px-3 py-2.5 text-[12.5px] font-medium text-urgent">
+                <AlertCircle className="size-4 shrink-0" />
+                <span className="flex-1">{error}</span>
+              </div>
+            )}
+
             <label className="block">
               <span className="text-[11.5px] font-medium text-ink-3">Work email</span>
               <input
@@ -186,6 +201,7 @@ function Login() {
                 onChange={(e) => {
                   const val = e.target.value;
                   setEmail(val);
+                  if (error) setError(null);
                   const found = staff.find((u) => u.email.toLowerCase() === val.trim().toLowerCase());
                   setSelected(found ? found.id : null);
                 }}
@@ -199,7 +215,10 @@ function Login() {
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(null);
+                  }}
                   placeholder="••••••••••"
                   className="w-full rounded-[9px] border border-line bg-surface px-3 py-2 pr-9 text-[13px] text-ink outline-none focus:border-pine-400"
                 />

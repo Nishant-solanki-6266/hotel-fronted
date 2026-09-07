@@ -73,8 +73,8 @@ export function AppShell({
   const [mounted, setMounted] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [drawer, setDrawer] = useState<null | "activity" | "whatsapp">(null);
-
-  useRealtimeSync();
+  const currentHotelId = (user as any)?.hotelId || hotel.name || "the-taj-hotel-mydnh7";
+  useRealtimeSync(currentHotelId);
 
   useEffect(() => {
     setMounted(true);

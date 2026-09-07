@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { roleLabel, signOut, useCurrentUser, useSession } from "@/lib/session";
 import { selectors, useApp } from "@/lib/store";
+import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ActivityPanel } from "./ActivityFeed";
@@ -72,6 +73,8 @@ export function AppShell({
   const [mounted, setMounted] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [drawer, setDrawer] = useState<null | "activity" | "whatsapp">(null);
+
+  useRealtimeSync();
 
   useEffect(() => {
     setMounted(true);

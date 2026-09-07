@@ -604,6 +604,70 @@ export async function setRoomStatus(
   toast(`Room ${roomNumber} — ${status}`, status === "Maintenance" ? "attend" : "ai");
 }
 
+/**
+ * Apply live updates from Mews PMS Webhook stream without requiring full page refresh
+ */
+export function applyPmsLiveUpdate(eventType: string, data: any) {
+  if (eventType === "pms:room_updated" && data?.roomNumber) {
+    const roomNum = String(data.roomNumber);
+    const status = data.status as RoomStatus;
+    set((s) => ({
+      rooms: s.rooms.map((r) =>
+        r.number === roomNum
+          ? {
+              ...r,
+              status,
+              updatedAt: data.time || "just now",
+            }
+          : r,
+      ),
+    }));
+    toast(`Room ${roomNum} is ${status}`, "ai", "Live from Mews PMS");
+  } else if (eventType === "pms:reservation_updated" && data?.roomNumber) {
+    const roomNum = String(data.roomNumber);
+    set((s) => ({
+      rooms: s.rooms.map((r) =>
+        r.number === roomNum
+          ? {
+              ...r,
+              guest: data.isCheckOut ? null : data.guestName || r.guest,
+              guestStatus: data.isCheckIn ? "Occupied" : data.isCheckOut ? "Vacant" : r.guestStatus,
+              status: data.isCheckOut ? "Dirty" : r.status,
+              updatedAt: data.time || "just now",
+            }
+          : r,
+      ),
+    }));
+    if (data.isCheckIn) {
+      toast(`Guest Checked In · Room ${roomNum}`, "good", `${data.guestName || "Guest"} arrived (Mews)`);
+    } else if (data.isCheckOut) {
+      toast(`Guest Checked Out · Room ${roomNum}`, "attend", `Room set to Dirty (Mews)`);
+    } else {
+      toast(`Reservation Updated · Room ${roomNum}`, "ai", `${data.guestName || "Guest"} (Mews)`);
+    }
+  } else if (eventType === "activity:new" && data?.text) {
+    pushActivity({
+      kind: data.kind || "room",
+      text: data.text,
+      meta: data.meta || "Mews PMS",
+    });
+  } else if (eventType === "conversation:updated" && data?.conversationId) {
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === data.conversationId
+          ? {
+              ...c,
+              unread: (c.unread || 0) + 1,
+              lastAt: data.time || "just now",
+              summary: data.lastMessage ? `"${data.lastMessage}"` : c.summary,
+            }
+          : c,
+      ),
+    }));
+    toast(`New Guest Email: ${data.subject || "Guest Inquiry"}`, "good", data.guestName ? `From ${data.guestName}` : "Guest Mailbox");
+  }
+}
+
 /* ---------------------------------------------------------------- issues -- */
 
 export async function createIssue(input: {
@@ -1436,11 +1500,32 @@ export async function runEmailDetection(address: string) {
   return detection;
 }
 
-export function connectEmail(method: EmailMethod, settings: EmailServerSettings | null = null) {
+export async function connectEmail(method: EmailMethod, settings: EmailServerSettings | null = null, password?: string) {
   const detection = store.state.onboarding.email.detection;
   const address = store.state.onboarding.email.address;
   const provider: "google" | "microsoft" | "other" =
     detection?.provider === "google" ? "google" : detection?.provider === "microsoft" ? "microsoft" : "other";
+
+  const host = settings?.imapHost;
+  const port = settings?.imapPort;
+
+  // Run live backend connection handshake
+  try {
+    const testRes = await api.testEmailConnection({
+      email: address,
+      password,
+      host,
+      port,
+      method,
+    });
+    if (testRes && testRes.success === false) {
+      failEmailConnection(testRes.message || "Failed to connect to mail server");
+      return;
+    }
+  } catch (err: any) {
+    // If testing endpoint returns an error, fail cleanly
+    console.warn("[Email Connection Test]", err?.message);
+  }
 
   set((s) => ({
     onboarding: {

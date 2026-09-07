@@ -263,6 +263,16 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  getInvoices: () => request<any[]>('/billing/invoices'),
+  // Email Integration
+  testEmailConnection: (data: { email: string; password?: string; host?: string; port?: number; method?: string }) =>
+    request<any>('/email/test-connection', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  sendGuestEmail: (data: { conversationId?: string; toEmail: string; subject?: string; text: string; author?: string }) =>
+    request<any>('/email/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
 

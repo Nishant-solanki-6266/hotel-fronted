@@ -156,6 +156,7 @@ export interface Room {
   note?: string;
   notes?: string[];
   category?: string;
+  guest?: string | null;
   guestName?: string;
   earlyCheckIn?: boolean;
 }

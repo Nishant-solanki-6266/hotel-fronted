@@ -3,6 +3,7 @@ import { api } from "./api";
 import {
   hotel,
   planTiers,
+  staff,
   subscription as defaultSubscription,
 } from "./data";
 import type {
@@ -105,7 +106,7 @@ function blankWa(connectionType: WaConnectionType): WaConnection {
 }
 
 /** The seeded hotel is already live, so its wizard reads as finished. */
-function connectedOnboarding(): OnboardingState {
+export function connectedOnboarding(): OnboardingState {
   return {
     complete: true,
     startedAt: null,
@@ -192,7 +193,7 @@ export const store = new Store<AppState>({
   aiRules: [],
   knowledge: [],
   hotelProfile: hotel,
-  users: [],
+  users: staff,
   subscription: defaultSubscription,
   invoices: [],
   onboarding: freshOnboarding(),
@@ -1131,189 +1132,9 @@ export async function removeKnowledgeDoc(id: string) {
 }
 
 export async function loadBackendData() {
-  try {
-    const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
-
-    const [
-      roomsRes,
-      tasksRes,
-      conversationsRes,
-      issuesRes,
-      upsellsRes,
-      activityRes,
-      rulesRes,
-      knowledgeRes,
-      usersRes,
-      subRes,
-      invoicesRes,
-      profileRes,
-    ] = await Promise.allSettled([
-      api.getRooms(),
-      api.getTasks(),
-      api.getConversations(),
-      api.getIssues(),
-      api.getUpsells(),
-      api.getActivity(),
-      api.getAiRules(),
-      api.getKnowledgeDocs(),
-      token ? api.getUsers() : Promise.resolve(null),
-      token ? api.getSubscription() : Promise.resolve(null),
-      token ? api.getInvoices() : Promise.resolve(null),
-      api.getHotelProfile(),
-    ]);
-
-    set((s) => {
-      const updates: Partial<AppState> = {};
-
-      if (roomsRes.status === "fulfilled" && Array.isArray(roomsRes.value) && roomsRes.value.length > 0) {
-        updates.rooms = roomsRes.value.map((r: any): Room => ({
-          number: r.number,
-          floor: r.floor ?? 1,
-          status: (r.status ?? "Clean") as Room["status"],
-          cleaningType: (r.cleaningType ?? "Departure") as Room["cleaningType"],
-          guestStatus: r.guestStatus ?? "Vacant",
-          arrivalTime: r.arrivalTime ?? undefined,
-          priority: (r.priority ?? "Normal") as Room["priority"],
-          cleaner: r.cleaner ?? undefined,
-          vip: Boolean(r.vip),
-          note: r.note ?? undefined,
-          updatedAt: r.updatedAt ?? "--:--",
-        }));
-      }
-
-      if (tasksRes.status === "fulfilled" && Array.isArray(tasksRes.value)) {
-        updates.tasks = tasksRes.value.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          detail: t.detail || "",
-          department: t.department || "Front Office",
-          priority: t.priority || "Normal",
-          room: t.room || undefined,
-          guest: t.guest || undefined,
-          conversationId: t.conversationId || undefined,
-          assignee: t.assignee || undefined,
-          status: t.status || "New",
-          createdAt: t.createdAt || "Today",
-          due: t.due || undefined,
-          source: t.source || "Dashboard",
-          trail: Array.isArray(t.trail) ? t.trail : typeof t.trail === "string" ? JSON.parse(t.trail) : [],
-        }));
-      }
-
-      if (conversationsRes.status === "fulfilled" && Array.isArray(conversationsRes.value)) {
-        updates.conversations = conversationsRes.value.map((c: any) => ({
-          id: c.id,
-          guest: c.guest || { id: c.guestId || "g-1", name: c.guestName || "Guest", phone: "", email: "", room: c.room, vip: false, language: "en", sentiment: "neutral" },
-          stage: c.stage || "in-house",
-          channels: Array.isArray(c.channels) ? c.channels : [c.primaryChannel || "whatsapp"],
-          primaryChannel: c.primaryChannel || "whatsapp",
-          unread: typeof c.unread === "number" ? c.unread : c.unread ? 1 : 0,
-          aiStatus: c.aiStatus || "ai-handling",
-          sentiment: c.sentiment || "neutral",
-          subject: c.subject || "Guest Chat",
-          summary: c.summary || "",
-          suggestedReply: c.suggestedReply || "",
-          knowledgeUsed: Array.isArray(c.knowledgeUsed) ? c.knowledgeUsed : [],
-          upsellIdeas: Array.isArray(c.upsellIdeas) ? c.upsellIdeas : [],
-          taskIds: Array.isArray(c.taskIds) ? c.taskIds : [],
-          lastAt: c.lastAt || "Just now",
-          aiHandledCount: typeof c.aiHandledCount === "number" ? c.aiHandledCount : 0,
-          room: c.room || undefined,
-          reservation: c.reservation || undefined,
-          escalation: typeof c.escalation === "string" ? JSON.parse(c.escalation) : c.escalation || undefined,
-          messages: Array.isArray(c.messages) ? c.messages : [],
-        }));
-      }
-
-      if (issuesRes.status === "fulfilled" && Array.isArray(issuesRes.value)) {
-        updates.issues = issuesRes.value.map((i: any): Issue => ({
-          id: i.id,
-          room: i.room,
-          title: i.title,
-          detail: i.detail || undefined,
-          priority: (i.priority || "Normal") as Priority,
-          reportedBy: i.reportedBy || "Staff",
-          via: i.via || "Dashboard",
-          createdAt: i.createdAt || "Today",
-          assignee: i.assignee || undefined,
-          // Backend stores initial status as "Reported"; frontend uses "Open"
-          status: (i.status === "Reported" ? "Open" : i.status || "Open") as Issue["status"],
-          outOfService: Boolean(i.outOfService),
-          updates: Array.isArray(i.updates)
-            ? i.updates.map((u: any) => ({ at: u.at, text: u.text, via: u.via || "dashboard" as const }))
-            : [],
-        }));
-      }
-
-      if (upsellsRes.status === "fulfilled" && Array.isArray(upsellsRes.value)) {
-        updates.upsells = upsellsRes.value.map((u: any) => ({
-          id: u.id,
-          guest: u.guest || u.guestName || "Guest",
-          room: u.room || undefined,
-          offer: u.offer,
-          value: u.value || 0,
-          status: u.status || "Sent",
-          channel: u.channel || "whatsapp",
-          date: u.date || "Today",
-          conversationId: u.conversationId || undefined,
-        }));
-      }
-
-      if (activityRes.status === "fulfilled" && Array.isArray(activityRes.value)) {
-        updates.activity = activityRes.value.map((a: any) => ({
-          id: a.id,
-          at: a.at || "Just now",
-          kind: a.kind || "system",
-          text: a.text,
-          meta: a.meta || undefined,
-        }));
-      }
-
-      if (rulesRes.status === "fulfilled" && rulesRes.value) {
-        if (Array.isArray(rulesRes.value.rules)) {
-          updates.aiRules = rulesRes.value.rules;
-        }
-        if (rulesRes.value.aiMode) {
-          updates.aiMode = rulesRes.value.aiMode;
-        }
-      }
-
-      if (knowledgeRes.status === "fulfilled" && Array.isArray(knowledgeRes.value)) {
-        updates.knowledge = knowledgeRes.value.map((k: any) => ({
-          id: k.id,
-          name: k.name || k.fileName || "Document",
-          category: (k.category as KnowledgeDoc["category"]) || "Hotel Policies",
-          format: (k.format?.toUpperCase() as KnowledgeDoc["format"]) || "PDF",
-          size: k.size || (k.fileSize ? `${(k.fileSize / 1024).toFixed(1)} KB` : "0 KB"),
-          updated: k.updated || "Just now",
-          status: k.status === "error" ? "Needs Review" : k.status === "indexed" ? "Indexed" : "Processing",
-          aiReady: k.aiReady ?? (k.status === "indexed"),
-          usedToday: k.usedToday || 0,
-        }));
-      }
-
-      if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value) && usersRes.value.length > 0) {
-        updates.users = usersRes.value;
-      }
-
-      if (subRes.status === "fulfilled" && subRes.value) {
-        updates.subscription = subRes.value;
-      }
-
-      if (invoicesRes.status === "fulfilled" && Array.isArray(invoicesRes.value) && invoicesRes.value.length > 0) {
-        updates.invoices = invoicesRes.value;
-      }
-
-      if (profileRes.status === "fulfilled" && profileRes.value) {
-        updates.hotelProfile = { ...s.hotelProfile, ...profileRes.value };
-      }
-
-      return updates;
-    });
-  } catch (err) {
-    console.warn("loadBackendData notice:", err);
-  }
+  return initBackendSync();
 }
+
 
 export async function syncKnowledgeWithBackend() {
   try {
@@ -1728,6 +1549,7 @@ export async function initBackendSync() {
       invoicesData,
       waThreadsData,
       pmsStatusData,
+      hotelProfileData,
     ] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
@@ -1743,7 +1565,15 @@ export async function initBackendSync() {
       api.getInvoices(),
       api.getWaThreads(),
       api.getPmsStatus().catch(() => null),
+      api.getHotelProfile().catch(() => null),
     ]);
+
+    const freshProfile = hotelProfileData || onboardingData?.hotelProfile || onboardingData?.hotel;
+    if (freshProfile) {
+      set((s) => ({
+        hotelProfile: { ...s.hotelProfile, ...freshProfile },
+      }));
+    }
 
     if (rooms && Array.isArray(rooms)) {
       set(() => ({ rooms }));
@@ -1754,10 +1584,10 @@ export async function initBackendSync() {
     if (issues && Array.isArray(issues)) {
       set(() => ({ issues }));
     }
-    if (waThreadsData && Array.isArray(waThreadsData) && waThreadsData.length > 0) {
+    if (waThreadsData && Array.isArray(waThreadsData)) {
       set(() => ({ waThreads: waThreadsData }));
     }
-    if (convs && Array.isArray(convs) && convs.length > 0) {
+    if (convs && Array.isArray(convs)) {
       const normalizedConvs: Conversation[] = convs.map((c: any) => ({
         ...c,
         channels: Array.isArray(c.channels) && c.channels.length > 0 ? c.channels : [c.primaryChannel || "whatsapp"],
@@ -1866,9 +1696,7 @@ export async function initBackendSync() {
             state: waInternalDone ? "connected" : "not-started",
           },
         },
-        hotelProfile: (onboardingData.hotelProfile || onboardingData.hotel)
-          ? { ...s.hotelProfile, ...(onboardingData.hotelProfile || onboardingData.hotel) }
-          : s.hotelProfile,
+        hotelProfile: freshProfile ? { ...s.hotelProfile, ...freshProfile } : s.hotelProfile,
         integrations: {
           pms: {
             provider: pmsStatusData?.provider || "Mews",
@@ -1904,26 +1732,34 @@ if (typeof window !== "undefined") {
   // Multi-device live sync loop (every 8 seconds)
   setInterval(async () => {
     try {
-      const [rooms, tasks, issues, convs, waThreads] = await Promise.all([
+      const [rooms, tasks, issues, convs, waThreads, users, profile] = await Promise.all([
         api.getRooms().catch(() => null),
         api.getTasks().catch(() => null),
         api.getIssues().catch(() => null),
         api.getConversations().catch(() => null),
         api.getWaThreads().catch(() => null),
+        api.getUsers().catch(() => null),
+        api.getHotelProfile().catch(() => null),
       ]);
-      if (rooms && Array.isArray(rooms) && rooms.length > 0) {
+      if (profile) {
+        set((s) => ({ hotelProfile: { ...s.hotelProfile, ...profile } }));
+      }
+      if (rooms && Array.isArray(rooms)) {
         set(() => ({ rooms }));
       }
-      if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+      if (tasks && Array.isArray(tasks)) {
         set(() => ({ tasks }));
       }
-      if (issues && Array.isArray(issues) && issues.length > 0) {
+      if (issues && Array.isArray(issues)) {
         set(() => ({ issues }));
+      }
+      if (users && Array.isArray(users) && users.length > 0) {
+        set(() => ({ users }));
       }
       if (waThreads && Array.isArray(waThreads) && waThreads.length > 0) {
         set(() => ({ waThreads }));
       }
-      if (convs && Array.isArray(convs) && convs.length > 0) {
+      if (convs && Array.isArray(convs)) {
         set((s) => ({
           conversations: s.conversations.map((c) => {
             const remote = convs.find((rc: any) => rc.id === c.id);
@@ -1936,5 +1772,3 @@ if (typeof window !== "undefined") {
     }
   }, 8000);
 }
-
-

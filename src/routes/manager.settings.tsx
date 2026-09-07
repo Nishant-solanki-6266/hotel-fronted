@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowUpRight,
@@ -51,13 +51,15 @@ import {
   setEmailProvider,
   setPlan,
   startOnboarding,
+  syncPmsWithBackend,
   toast,
   toggleWhatsApp,
   updateHotelProfile,
   updateStaffRole,
-  uploadKnowledgeDoc,
+  store,
   useApp,
 } from "@/lib/store";
+import { api } from "@/lib/api";
 import type { AiRule, HotelProfile, KnowledgeDoc, Role } from "@/lib/types";
 import { cn, money } from "@/lib/utils";
 
@@ -367,6 +369,14 @@ function UsersPanel() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
+  useEffect(() => {
+    api.getUsers().then((remoteUsers) => {
+      if (remoteUsers && Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+        store.setState((s) => ({ ...s, users: remoteUsers }));
+      }
+    });
+  }, []);
+
   const handleInvite = async () => {
     if (!email.includes("@")) return;
     setIsSubmitting(true);
@@ -625,10 +635,13 @@ function KnowledgePanel() {
                 type="file"
                 accept=".pdf,.docx,.doc,.txt,.csv"
                 className="hidden"
-                onChange={(e) => {
+                onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    uploadKnowledgeDoc(file, uploadCategory);
+                    await api.uploadKnowledgeDoc(file, uploadCategory);
+                    toast("Source uploaded", "good", file.name);
+                    const freshDocs = await api.getKnowledgeDocs();
+                    if (freshDocs) store.setState((s) => ({ ...s, knowledge: freshDocs }));
                     e.target.value = "";
                   }
                 }}
@@ -742,7 +755,7 @@ function IntegrationsPanel() {
                   <KeyValue label="Reads" value="Availability, rates, reservations, folios" />
                   <KeyValue label="Writes" value="Nothing — read only" />
                 </div>
-                <Button size="sm" variant="outline" className="mt-3 w-full" icon={RefreshCw} onClick={() => toast("Synced with Mews", "good", "Availability and arrivals refreshed")}>
+                <Button size="sm" variant="outline" className="mt-3 w-full" icon={RefreshCw} onClick={() => syncPmsWithBackend()}>
                   Sync now
                 </Button>
               </div>

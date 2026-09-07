@@ -8,7 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { setTaskStatus } from "@/lib/store";
-import type { Task, TaskSource } from "@/lib/types";
+import type { Task } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Badge, Button, priorityTone, statusTone } from "./ui";
 

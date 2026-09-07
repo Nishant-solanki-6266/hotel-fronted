@@ -84,8 +84,10 @@ export function AppShell({
     if (session.ready && !session.userId) {
       navigate({ to: "/login" });
     } else if (session.ready && session.userId) {
-      import("@/lib/store").then(({ loadBackendData }) => {
-        loadBackendData();
+      import("@/lib/store").then(({ initBackendSync }) => {
+        if (typeof initBackendSync === "function") {
+          initBackendSync();
+        }
       });
     }
   }, [session.ready, session.userId, navigate]);

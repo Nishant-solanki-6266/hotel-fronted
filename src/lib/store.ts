@@ -3,6 +3,7 @@ import { api } from "./api";
 import {
   hotel,
   planTiers,
+  staff,
   subscription as defaultSubscription,
 } from "./data";
 import type {
@@ -105,7 +106,7 @@ function blankWa(connectionType: WaConnectionType): WaConnection {
 }
 
 /** The seeded hotel is already live, so its wizard reads as finished. */
-function connectedOnboarding(): OnboardingState {
+export function connectedOnboarding(): OnboardingState {
   return {
     complete: true,
     startedAt: null,
@@ -192,7 +193,7 @@ export const store = new Store<AppState>({
   aiRules: [],
   knowledge: [],
   hotelProfile: hotel,
-  users: [],
+  users: staff,
   subscription: defaultSubscription,
   invoices: [],
   onboarding: freshOnboarding(),
@@ -690,6 +691,7 @@ export function applyPmsLiveUpdate(eventType: string, data: any) {
           taskIds: [],
           unread: 1,
           lastAt: data.time || "just now",
+          aiHandledCount: 0,
           guest: {
             id: data.guestId || `gst_${convId}`,
             name: data.guestName || "Guest",
@@ -1193,189 +1195,9 @@ export async function removeKnowledgeDoc(id: string) {
 }
 
 export async function loadBackendData() {
-  try {
-    const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
-
-    const [
-      roomsRes,
-      tasksRes,
-      conversationsRes,
-      issuesRes,
-      upsellsRes,
-      activityRes,
-      rulesRes,
-      knowledgeRes,
-      usersRes,
-      subRes,
-      invoicesRes,
-      profileRes,
-    ] = await Promise.allSettled([
-      api.getRooms(),
-      api.getTasks(),
-      api.getConversations(),
-      api.getIssues(),
-      api.getUpsells(),
-      api.getActivity(),
-      api.getAiRules(),
-      api.getKnowledgeDocs(),
-      token ? api.getUsers() : Promise.resolve(null),
-      token ? api.getSubscription() : Promise.resolve(null),
-      token ? api.getInvoices() : Promise.resolve(null),
-      api.getHotelProfile(),
-    ]);
-
-    set((s) => {
-      const updates: Partial<AppState> = {};
-
-      if (roomsRes.status === "fulfilled" && Array.isArray(roomsRes.value) && roomsRes.value.length > 0) {
-        updates.rooms = roomsRes.value.map((r: any): Room => ({
-          number: r.number,
-          floor: r.floor ?? 1,
-          status: (r.status ?? "Clean") as Room["status"],
-          cleaningType: (r.cleaningType ?? "Departure") as Room["cleaningType"],
-          guestStatus: r.guestStatus ?? "Vacant",
-          arrivalTime: r.arrivalTime ?? undefined,
-          priority: (r.priority ?? "Normal") as Room["priority"],
-          cleaner: r.cleaner ?? undefined,
-          vip: Boolean(r.vip),
-          note: r.note ?? undefined,
-          updatedAt: r.updatedAt ?? "--:--",
-        }));
-      }
-
-      if (tasksRes.status === "fulfilled" && Array.isArray(tasksRes.value)) {
-        updates.tasks = tasksRes.value.map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          detail: t.detail || "",
-          department: t.department || "Front Office",
-          priority: t.priority || "Normal",
-          room: t.room || undefined,
-          guest: t.guest || undefined,
-          conversationId: t.conversationId || undefined,
-          assignee: t.assignee || undefined,
-          status: t.status || "New",
-          createdAt: t.createdAt || "Today",
-          due: t.due || undefined,
-          source: t.source || "Dashboard",
-          trail: Array.isArray(t.trail) ? t.trail : typeof t.trail === "string" ? JSON.parse(t.trail) : [],
-        }));
-      }
-
-      if (conversationsRes.status === "fulfilled" && Array.isArray(conversationsRes.value)) {
-        updates.conversations = conversationsRes.value.map((c: any) => ({
-          id: c.id,
-          guest: c.guest || { id: c.guestId || "g-1", name: c.guestName || "Guest", phone: "", email: "", room: c.room, vip: false, language: "en", sentiment: "neutral" },
-          stage: c.stage || "in-house",
-          channels: Array.isArray(c.channels) ? c.channels : [c.primaryChannel || "whatsapp"],
-          primaryChannel: c.primaryChannel || "whatsapp",
-          unread: typeof c.unread === "number" ? c.unread : c.unread ? 1 : 0,
-          aiStatus: c.aiStatus || "ai-handling",
-          sentiment: c.sentiment || "neutral",
-          subject: c.subject || "Guest Chat",
-          summary: c.summary || "",
-          suggestedReply: c.suggestedReply || "",
-          knowledgeUsed: Array.isArray(c.knowledgeUsed) ? c.knowledgeUsed : [],
-          upsellIdeas: Array.isArray(c.upsellIdeas) ? c.upsellIdeas : [],
-          taskIds: Array.isArray(c.taskIds) ? c.taskIds : [],
-          lastAt: c.lastAt || "Just now",
-          aiHandledCount: typeof c.aiHandledCount === "number" ? c.aiHandledCount : 0,
-          room: c.room || undefined,
-          reservation: c.reservation || undefined,
-          escalation: typeof c.escalation === "string" ? JSON.parse(c.escalation) : c.escalation || undefined,
-          messages: Array.isArray(c.messages) ? c.messages : [],
-        }));
-      }
-
-      if (issuesRes.status === "fulfilled" && Array.isArray(issuesRes.value)) {
-        updates.issues = issuesRes.value.map((i: any): Issue => ({
-          id: i.id,
-          room: i.room,
-          title: i.title,
-          detail: i.detail || undefined,
-          priority: (i.priority || "Normal") as Priority,
-          reportedBy: i.reportedBy || "Staff",
-          via: i.via || "Dashboard",
-          createdAt: i.createdAt || "Today",
-          assignee: i.assignee || undefined,
-          // Backend stores initial status as "Reported"; frontend uses "Open"
-          status: (i.status === "Reported" ? "Open" : i.status || "Open") as Issue["status"],
-          outOfService: Boolean(i.outOfService),
-          updates: Array.isArray(i.updates)
-            ? i.updates.map((u: any) => ({ at: u.at, text: u.text, via: u.via || "dashboard" as const }))
-            : [],
-        }));
-      }
-
-      if (upsellsRes.status === "fulfilled" && Array.isArray(upsellsRes.value)) {
-        updates.upsells = upsellsRes.value.map((u: any) => ({
-          id: u.id,
-          guest: u.guest || u.guestName || "Guest",
-          room: u.room || undefined,
-          offer: u.offer,
-          value: u.value || 0,
-          status: u.status || "Sent",
-          channel: u.channel || "whatsapp",
-          date: u.date || "Today",
-          conversationId: u.conversationId || undefined,
-        }));
-      }
-
-      if (activityRes.status === "fulfilled" && Array.isArray(activityRes.value)) {
-        updates.activity = activityRes.value.map((a: any) => ({
-          id: a.id,
-          at: a.at || "Just now",
-          kind: a.kind || "system",
-          text: a.text,
-          meta: a.meta || undefined,
-        }));
-      }
-
-      if (rulesRes.status === "fulfilled" && rulesRes.value) {
-        if (Array.isArray(rulesRes.value.rules)) {
-          updates.aiRules = rulesRes.value.rules;
-        }
-        if (rulesRes.value.aiMode) {
-          updates.aiMode = rulesRes.value.aiMode;
-        }
-      }
-
-      if (knowledgeRes.status === "fulfilled" && Array.isArray(knowledgeRes.value)) {
-        updates.knowledge = knowledgeRes.value.map((k: any) => ({
-          id: k.id,
-          name: k.name || k.fileName || "Document",
-          category: (k.category as KnowledgeDoc["category"]) || "Hotel Policies",
-          format: (k.format?.toUpperCase() as KnowledgeDoc["format"]) || "PDF",
-          size: k.size || (k.fileSize ? `${(k.fileSize / 1024).toFixed(1)} KB` : "0 KB"),
-          updated: k.updated || "Just now",
-          status: k.status === "error" ? "Needs Review" : k.status === "indexed" ? "Indexed" : "Processing",
-          aiReady: k.aiReady ?? (k.status === "indexed"),
-          usedToday: k.usedToday || 0,
-        }));
-      }
-
-      if (usersRes.status === "fulfilled" && Array.isArray(usersRes.value) && usersRes.value.length > 0) {
-        updates.users = usersRes.value;
-      }
-
-      if (subRes.status === "fulfilled" && subRes.value) {
-        updates.subscription = subRes.value;
-      }
-
-      if (invoicesRes.status === "fulfilled" && Array.isArray(invoicesRes.value) && invoicesRes.value.length > 0) {
-        updates.invoices = invoicesRes.value;
-      }
-
-      if (profileRes.status === "fulfilled" && profileRes.value) {
-        updates.hotelProfile = { ...s.hotelProfile, ...profileRes.value };
-      }
-
-      return updates;
-    });
-  } catch (err) {
-    console.warn("loadBackendData notice:", err);
-  }
+  return initBackendSync();
 }
+
 
 export async function syncKnowledgeWithBackend() {
   try {
@@ -1432,24 +1254,103 @@ export function setWaTopology(waTopology: WaTopology) {
   api.saveTopology(waTopology);
 }
 
-export async function connectPms(provider: string, propertyId: string) {
-  set((s) => ({
-    onboarding: {
-      ...s.onboarding,
-      pms: {
-        ...s.onboarding.pms,
-        state: "connected",
-        provider,
-        propertyId,
-        propertyName: s.hotelProfile.name,
-        lastSync: "just now",
-        error: null,
+export async function connectPms(provider: string, propertyId: string): Promise<boolean> {
+  try {
+    const res = await api.connectPms(provider, propertyId);
+    if (res && (res.success || res.status === "connected")) {
+      set((s) => ({
+        onboarding: {
+          ...s.onboarding,
+          pms: {
+            ...s.onboarding.pms,
+            state: "connected",
+            provider: res.provider || provider,
+            propertyId: res.propertyId || propertyId,
+            propertyName: res.propertyName || s.hotelProfile.name,
+            lastSync: res.lastSyncAt ? "Live" : "just now",
+            error: null,
+          },
+          done: { ...s.onboarding.done, pms: true },
+        },
+        integrations: {
+          ...s.integrations,
+          pms: {
+            provider: res.provider || provider,
+            connected: true,
+            lastSync: res.lastSyncAt ? "Live" : "just now",
+          },
+        },
+      }));
+      api.saveOnboardingStep("pms", { provider, propertyId });
+      toast(`${provider} connected`, "good", `Validated enterprise: ${res.propertyName || propertyId}`);
+      return true;
+    } else {
+      const errorMsg = (res as any)?.message || "Could not validate Mews credentials against Mews API";
+      set((s) => ({
+        onboarding: {
+          ...s.onboarding,
+          pms: {
+            ...s.onboarding.pms,
+            state: "error",
+            error: errorMsg,
+          },
+        },
+        integrations: {
+          ...s.integrations,
+          pms: {
+            ...s.integrations.pms,
+            connected: false,
+          },
+        },
+      }));
+      toast("Mews connection failed", "urgent", errorMsg);
+      return false;
+    }
+  } catch (err: any) {
+    const errorMsg = err?.message || "Mews connection error";
+    set((s) => ({
+      onboarding: {
+        ...s.onboarding,
+        pms: {
+          ...s.onboarding.pms,
+          state: "error",
+          error: errorMsg,
+        },
       },
-      done: { ...s.onboarding.done, pms: true },
-    },
-  }));
-  api.saveOnboardingStep("pms", { provider, propertyId });
-  toast(`${provider} connected`, "good", "Read-only — availability, rates and arrivals");
+    }));
+    toast("Mews connection failed", "urgent", errorMsg);
+    return false;
+  }
+}
+
+export async function syncPmsWithBackend() {
+  toast("Starting PMS sync…", "ai", "Communicating with Mews Connector API");
+  try {
+    const res = await api.syncPms();
+    if (res && res.success) {
+      const [rooms, tasks, issues, convs] = await Promise.all([
+        api.getRooms().catch(() => null),
+        api.getTasks().catch(() => null),
+        api.getIssues().catch(() => null),
+        api.getConversations().catch(() => null),
+      ]);
+      if (rooms && Array.isArray(rooms)) set(() => ({ rooms }));
+      if (tasks && Array.isArray(tasks)) set(() => ({ tasks }));
+      if (issues && Array.isArray(issues)) set(() => ({ issues }));
+      if (convs && Array.isArray(convs)) set(() => ({ conversations: convs }));
+
+      const countRooms = res.synced?.rooms ?? 0;
+      const countRes = res.synced?.reservations ?? 0;
+      toast("Synced with Mews", "good", `${countRooms} rooms & ${countRes} reservations updated`);
+      return res;
+    } else {
+      toast("PMS sync failed", "urgent", res?.message || "Failed to sync data from Mews API");
+      return null;
+    }
+  } catch (err: any) {
+    toast("PMS sync failed", "urgent", err?.message || "PMS synchronization error");
+    return null;
+  }
 }
 
 /**
@@ -1710,6 +1611,8 @@ export async function initBackendSync() {
       subData,
       invoicesData,
       waThreadsData,
+      pmsStatusData,
+      hotelProfileData,
     ] = await Promise.all([
       api.getRooms(),
       api.getTasks(),
@@ -1724,7 +1627,16 @@ export async function initBackendSync() {
       api.getSubscription(),
       api.getInvoices(),
       api.getWaThreads(),
+      api.getPmsStatus().catch(() => null),
+      api.getHotelProfile().catch(() => null),
     ]);
+
+    const freshProfile = hotelProfileData || onboardingData?.hotelProfile || onboardingData?.hotel;
+    if (freshProfile) {
+      set((s) => ({
+        hotelProfile: { ...s.hotelProfile, ...freshProfile },
+      }));
+    }
 
     if (rooms && Array.isArray(rooms)) {
       set(() => ({ rooms }));
@@ -1735,10 +1647,10 @@ export async function initBackendSync() {
     if (issues && Array.isArray(issues)) {
       set(() => ({ issues }));
     }
-    if (waThreadsData && Array.isArray(waThreadsData) && waThreadsData.length > 0) {
+    if (waThreadsData && Array.isArray(waThreadsData)) {
       set(() => ({ waThreads: waThreadsData }));
     }
-    if (convs && Array.isArray(convs) && convs.length > 0) {
+    if (convs && Array.isArray(convs)) {
       const normalizedConvs: Conversation[] = convs.map((c: any) => ({
         ...c,
         channels: Array.isArray(c.channels) && c.channels.length > 0 ? c.channels : [c.primaryChannel || "whatsapp"],
@@ -1813,7 +1725,7 @@ export async function initBackendSync() {
       }
     }
     if (onboardingData) {
-      const pmsDone = Boolean(onboardingData.done?.pms);
+      const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
       const emailDone = Boolean(onboardingData.done?.email);
       const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
       const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);
@@ -1824,11 +1736,13 @@ export async function initBackendSync() {
           ...s.onboarding,
           waTopology: onboardingData.waTopology || s.onboarding.waTopology,
           complete: onboardingData.complete !== undefined ? onboardingData.complete : s.onboarding.complete,
-          done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done } : s.onboarding.done,
+          done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done, pms: isPmsActuallyConnected } : s.onboarding.done,
           pms: {
             ...s.onboarding.pms,
-            state: pmsDone ? "connected" : "not-started",
-            provider: pmsDone ? "Mews" : null,
+            state: isPmsActuallyConnected ? "connected" : "not-started",
+            provider: isPmsActuallyConnected ? (pmsStatusData?.provider || "Mews") : null,
+            propertyId: pmsStatusData?.propertyId || s.onboarding.pms.propertyId,
+            lastSync: pmsStatusData?.lastSyncAt || (isPmsActuallyConnected ? "Live" : null),
           },
           email: {
             ...s.onboarding.email,
@@ -1845,14 +1759,12 @@ export async function initBackendSync() {
             state: waInternalDone ? "connected" : "not-started",
           },
         },
-        hotelProfile: (onboardingData.hotelProfile || onboardingData.hotel)
-          ? { ...s.hotelProfile, ...(onboardingData.hotelProfile || onboardingData.hotel) }
-          : s.hotelProfile,
+        hotelProfile: freshProfile ? { ...s.hotelProfile, ...freshProfile } : s.hotelProfile,
         integrations: {
           pms: {
-            provider: "Mews",
-            connected: pmsDone,
-            lastSync: pmsDone ? "Live" : "Not connected",
+            provider: pmsStatusData?.provider || "Mews",
+            connected: isPmsActuallyConnected,
+            lastSync: pmsStatusData?.lastSyncAt ? "Live" : isPmsActuallyConnected ? "Live" : "Not connected",
           },
           email: {
             provider: "google",
@@ -1862,7 +1774,7 @@ export async function initBackendSync() {
           whatsapp: {
             connected: waConnected,
             number: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || "",
-            waba: waConnected ? "Hotel Mercier BV · WABA Connected" : "",
+            waba: waConnected ? `${s.hotelProfile.legalName || 'Hotel'} · WABA Connected` : "",
             quality: "High",
             templates: waConnected ? 11 : 0,
           },
@@ -1883,21 +1795,29 @@ if (typeof window !== "undefined") {
   // Multi-device live sync loop (every 8 seconds)
   setInterval(async () => {
     try {
-      const [rooms, tasks, issues, convs, waThreads] = await Promise.all([
+      const [rooms, tasks, issues, convs, waThreads, users, profile] = await Promise.all([
         api.getRooms().catch(() => null),
         api.getTasks().catch(() => null),
         api.getIssues().catch(() => null),
         api.getConversations().catch(() => null),
         api.getWaThreads().catch(() => null),
+        api.getUsers().catch(() => null),
+        api.getHotelProfile().catch(() => null),
       ]);
-      if (rooms && Array.isArray(rooms) && rooms.length > 0) {
+      if (profile) {
+        set((s) => ({ hotelProfile: { ...s.hotelProfile, ...profile } }));
+      }
+      if (rooms && Array.isArray(rooms)) {
         set(() => ({ rooms }));
       }
-      if (tasks && Array.isArray(tasks) && tasks.length > 0) {
+      if (tasks && Array.isArray(tasks)) {
         set(() => ({ tasks }));
       }
-      if (issues && Array.isArray(issues) && issues.length > 0) {
+      if (issues && Array.isArray(issues)) {
         set(() => ({ issues }));
+      }
+      if (users && Array.isArray(users) && users.length > 0) {
+        set(() => ({ users }));
       }
       if (waThreads && Array.isArray(waThreads) && waThreads.length > 0) {
         set(() => ({ waThreads }));
@@ -1942,5 +1862,3 @@ if (typeof window !== "undefined") {
     }
   }, 8000);
 }
-
-

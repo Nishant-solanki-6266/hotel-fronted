@@ -8,7 +8,6 @@ import {
   Wrench,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
-import type { ActivityItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Eyebrow } from "./ui";
 

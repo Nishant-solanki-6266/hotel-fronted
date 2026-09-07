@@ -4,18 +4,37 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 
 async function getOrRefreshToken(): Promise<string | null> {
   if (typeof localStorage === 'undefined') return null;
-  let token = localStorage.getItem('token');
+  const token = localStorage.getItem('token');
   if (token) return token;
 
-  const sessionUserId = localStorage.getItem('hotelogx.session.v1') || 'u-jonas';
-  const foundUser = staff.find((u) => u.id === sessionUserId) || staff[0];
-  if (!foundUser) return null;
+  const userJson = localStorage.getItem('hotelogx.user.v1');
+  let email: string | null = null;
+  let userId: string | null = null;
+
+  if (userJson) {
+    try {
+      const parsed = JSON.parse(userJson);
+      email = parsed.email;
+      userId = parsed.id;
+    } catch {}
+  }
+
+  if (!email) {
+    const sessionUserId = localStorage.getItem('hotelogx.session.v1');
+    const demoUser = staff.find((u) => u.id === sessionUserId);
+    if (demoUser) {
+      email = demoUser.email;
+      userId = demoUser.id;
+    }
+  }
+
+  if (!email) return null;
 
   try {
     const res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: foundUser.email, userId: foundUser.id }),
+      body: JSON.stringify({ email, userId }),
     });
     if (res.ok) {
       const json = await res.json();
@@ -125,13 +144,30 @@ export const api = {
       body: JSON.stringify({ assignee }),
     }),
 
-  // Auth
+    // Auth
   login: (credentials: { email?: string; password?: string; userId?: string }) =>
     request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     }),
+  registerHotel: (data: { hotelName: string; managerName: string; email: string; password?: string; phone?: string }) =>
+    request<{ token: string; user: any; hotel: any }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   getMe: () => request<any>('/auth/me'),
+
+  // PMS Integration (Mews)
+  connectPms: (provider: string, propertyId: string) =>
+    request<any>('/pms/connect', {
+      method: 'POST',
+      body: JSON.stringify({ provider, propertyId }),
+    }),
+  getPmsStatus: () => request<any>('/pms/status'),
+  syncPms: () =>
+    request<any>('/pms/sync', {
+      method: 'POST',
+    }),
 
   // Conversations / Chat
   getConversations: () => request<any[]>('/conversations'),
@@ -241,6 +277,7 @@ export const api = {
 
   // Billing & Subscriptions
   getSubscription: () => request<any>('/billing/subscription'),
+  getInvoices: () => request<any[]>('/billing/invoices'),
   updateSubscription: (data: { plan?: string; billingCycle?: string; rooms?: number }) =>
     request<any>('/billing/subscription', {
       method: 'PUT',

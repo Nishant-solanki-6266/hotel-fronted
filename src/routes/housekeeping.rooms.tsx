@@ -4,8 +4,7 @@ import { Crown, MessageCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { WhatsAppOps } from "@/components/WhatsAppOps";
 import { Badge, Button, Card, Empty, Eyebrow, statusTone } from "@/components/ui";
-import { setRoomStatus, useApp } from "@/lib/store";
-import { cleaners } from "@/lib/data";
+import { setRoomStatus, useApp, selectors } from "@/lib/store";
 import type { RoomStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +28,7 @@ const nextStatuses: RoomStatus[] = ["Cleaning", "Clean", "Inspected", "DND", "Gu
 
 function HousekeepingRooms() {
   const rooms = useApp((s) => s.rooms);
+  const teamCleaners = useApp(selectors.housekeepingTeam);
   const [status, setStatus] = useState<RoomStatus | "All">("All");
   const [cleaner, setCleaner] = useState<string>("All");
   const [floor, setFloor] = useState<number | "All">("All");
@@ -47,8 +47,9 @@ function HousekeepingRooms() {
 
   const availableCleaners = useMemo(() => {
     const list = Array.from(new Set(rooms.map((r) => r.cleaner).filter((c): c is string => Boolean(c))));
-    return list.length > 0 ? list : cleaners;
-  }, [rooms]);
+    const combined = Array.from(new Set([...list, ...teamCleaners])).filter(Boolean);
+    return combined;
+  }, [rooms, teamCleaners]);
 
   const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
 

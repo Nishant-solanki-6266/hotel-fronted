@@ -793,7 +793,7 @@ function IntegrationsPanel() {
                 return (
                   <button
                     key={option.key}
-                    onClick={() => setEmailProvider(option.key, option.key === "other" ? otherDomain || "reception@yourhotel.com" : integrations.email.account)}
+                    onClick={() => setEmailProvider(option.key, option.key === "other" ? otherDomain || profile.email || "reception@yourhotel.com" : profile.email || integrations.email.account)}
                     className={cn(
                       "rounded-[10px] border p-3.5 text-left transition-colors",
                       active ? "border-pine-400 bg-pine-50/60" : "border-line bg-surface hover:border-ink-4",
@@ -819,7 +819,7 @@ function IntegrationsPanel() {
                   { label: "IMAP port", placeholder: "993" },
                   { label: "SMTP server", placeholder: "smtp.yourhotel.com" },
                   { label: "SMTP port", placeholder: "587" },
-                  { label: "Mailbox address", placeholder: "reception@yourhotel.com" },
+                  { label: "Mailbox address", placeholder: profile.email || "reception@yourhotel.com" },
                   { label: "Password", placeholder: "••••••••" },
                 ].map((f) => (
                   <label key={f.label} className="block">
@@ -841,10 +841,10 @@ function IntegrationsPanel() {
             ) : (
               <div className="mt-4 rounded-[10px] border border-line bg-paper/50 p-3.5">
                 <div className="divide-y divide-line-soft">
-                  <KeyValue label="Mailbox" value={integrations.email.account} mono />
+                  <KeyValue label="Mailbox" value={integrations.email.account || profile.email} mono />
                   <KeyValue label="Provider" value={integrations.email.provider === "google" ? "Google Workspace" : "Microsoft 365"} />
                   <KeyValue label="Permissions" value="Read, send, reply in thread" />
-                  <KeyValue label="Signature" value="Hotel Mercier · Reception" />
+                  <KeyValue label="Signature" value={`${profile.name || "Hotel"} · Reception`} />
                 </div>
                 <p className="mt-2.5 text-[11.5px] leading-snug text-ink-4">
                   Guest emails are matched to the same conversation as their WhatsApp messages, so one guest is one thread even
@@ -933,6 +933,94 @@ function BillingPanel() {
   const aiShare = subscription.usage.conversations
     ? Math.round((subscription.usage.aiReplies / subscription.usage.conversations) * 100)
     : 0;
+
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [cardHolder, setCardHolder] = useState(subscription.paymentMethod.holder || profile.legalName || profile.name);
+  const [cardBrand, setCardBrand] = useState(subscription.paymentMethod.brand || "Visa");
+  const [cardLast4, setCardLast4] = useState(subscription.paymentMethod.last4 || "4417");
+  const [cardExpiry, setCardExpiry] = useState(subscription.paymentMethod.expiry || "09/28");
+
+  const saveCard = () => {
+    const updatedPayment = {
+      brand: cardBrand,
+      last4: cardLast4.slice(-4),
+      expiry: cardExpiry,
+      holder: cardHolder,
+    };
+    store.setState((s) => ({
+      ...s,
+      subscription: {
+        ...s.subscription,
+        paymentMethod: updatedPayment,
+      },
+    }));
+    setIsCardModalOpen(false);
+    toast("Payment method updated", "good", `${cardBrand} ···· ${cardLast4.slice(-4)}`);
+  };
+
+  const downloadInvoice = (inv: typeof invoices[0]) => {
+    const content = `=======================================================
+HOTELOGX CONNECT — SUBSCRIPTION INVOICE
+=======================================================
+
+Invoice Number : ${inv.number}
+Date           : ${inv.date}
+Billing Period : ${inv.period}
+Status         : ${inv.status}
+
+-------------------------------------------------------
+CUSTOMER DETAILS:
+Hotel Name     : ${profile.name}
+Legal Entity   : ${profile.legalName || profile.name}
+VAT Number     : ${profile.vatNumber || "N/A"}
+Billing Email  : ${profile.email}
+Address        : ${profile.address}, ${profile.postcode} ${profile.city}, ${profile.country}
+
+-------------------------------------------------------
+SUBSCRIPTION DETAILS:
+Plan           : ${current.name} Tier
+Rooms Active   : ${rooms} Rooms
+Price / Room   : ${money(current.pricePerRoom)}
+Billing Cycle  : ${cycle.toUpperCase()}
+
+-------------------------------------------------------
+TOTAL BILLED   : ${money(inv.amount)}
+PAYMENT STATUS : PAID (${subscription.paymentMethod.brand} ···· ${subscription.paymentMethod.last4})
+=======================================================
+Thank you for using Hotelogx Connect.
+`;
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${inv.number}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast("Invoice downloaded", "good", `${inv.number} saved to your device`);
+  };
+
+  const exportAllInvoices = () => {
+    if (!invoices || invoices.length === 0) {
+      toast("No invoices found", "attend");
+      return;
+    }
+    const headers = "Invoice Number,Period,Date,Amount,Status\n";
+    const rows = invoices
+      .map((i) => `"${i.number}","${i.period}","${i.date}","${i.amount}","${i.status}"`)
+      .join("\n");
+    const blob = new Blob([headers + rows], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `hotelogx-invoices-${profile.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast("Invoices exported", "good", "CSV downloaded to your device");
+  };
 
   return (
     <div className="space-y-4">
@@ -1031,7 +1119,7 @@ function BillingPanel() {
           <Card pad={false}>
             <div className="flex items-center justify-between border-b border-line px-4 py-3">
               <p className="text-[13.5px] font-medium text-ink">Invoices</p>
-              <Button size="sm" variant="ghost" icon={Download} onClick={() => toast("Invoices exported", "good", "CSV sent to your reception mailbox")}>
+              <Button size="sm" variant="ghost" icon={Download} onClick={exportAllInvoices}>
                 Export all
               </Button>
             </div>
@@ -1046,7 +1134,7 @@ function BillingPanel() {
                   <p className="hidden text-[11.5px] text-ink-4 sm:block">{inv.date}</p>
                   <p className="tnum w-20 text-right font-mono text-[12.5px] font-medium text-ink">{money(inv.amount)}</p>
                   <Badge tone={statusTone(inv.status)}>{inv.status}</Badge>
-                  <Button size="sm" variant="ghost" icon={Download} onClick={() => toast("Invoice downloaded", "good", inv.number)} />
+                  <Button size="sm" variant="ghost" icon={Download} onClick={() => downloadInvoice(inv)} />
                 </li>
               ))}
             </ul>
@@ -1072,7 +1160,7 @@ function BillingPanel() {
               variant="outline"
               className="mt-2.5 w-full"
               icon={Pencil}
-              onClick={() => toast("Card update", "ai", "Opens your payment provider — never handled in this page")}
+              onClick={() => setIsCardModalOpen(true)}
             >
               Update card
             </Button>
@@ -1171,6 +1259,84 @@ function BillingPanel() {
           })}
         </div>
       </Card>
+
+      {isCardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[14px] border border-line bg-surface p-5 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-line-soft pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="size-4 text-pine-600" />
+                <h3 className="text-[15px] font-medium text-ink">Update Payment Method</h3>
+              </div>
+              <button
+                onClick={() => setIsCardModalOpen(false)}
+                className="text-ink-4 hover:text-ink text-[18px] leading-none"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <span className="text-[11.5px] font-medium text-ink-3">Cardholder Name</span>
+                <input
+                  type="text"
+                  value={cardHolder}
+                  onChange={(e) => setCardHolder(e.target.value)}
+                  placeholder="The Taj Hotel BV"
+                  className="mt-1 w-full rounded-[9px] border border-line bg-paper px-3 py-2 text-[13px] text-ink outline-none focus:border-pine-400"
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[11.5px] font-medium text-ink-3">Card Brand</span>
+                  <select
+                    value={cardBrand}
+                    onChange={(e) => setCardBrand(e.target.value)}
+                    className="mt-1 w-full rounded-[9px] border border-line bg-paper px-3 py-2 text-[13px] text-ink outline-none focus:border-pine-400"
+                  >
+                    <option value="Visa">Visa</option>
+                    <option value="Mastercard">Mastercard</option>
+                    <option value="American Express">American Express</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-[11.5px] font-medium text-ink-3">Expiry (MM/YY)</span>
+                  <input
+                    type="text"
+                    value={cardExpiry}
+                    maxLength={5}
+                    onChange={(e) => setCardExpiry(e.target.value)}
+                    placeholder="12/28"
+                    className="mt-1 w-full rounded-[9px] border border-line bg-paper px-3 py-2 text-[13px] text-ink font-mono outline-none focus:border-pine-400"
+                  />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-[11.5px] font-medium text-ink-3">Card Number (Last 4 Digits)</span>
+                <input
+                  type="text"
+                  value={cardLast4}
+                  maxLength={4}
+                  onChange={(e) => setCardLast4(e.target.value.replace(/\D/g, ""))}
+                  placeholder="4417"
+                  className="mt-1 w-full rounded-[9px] border border-line bg-paper px-3 py-2 text-[13px] text-ink font-mono outline-none focus:border-pine-400"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2 border-t border-line-soft pt-3.5">
+              <Button size="sm" variant="quiet" onClick={() => setIsCardModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={saveCard} icon={Check}>
+                Save Card
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

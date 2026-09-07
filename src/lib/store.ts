@@ -1524,11 +1524,11 @@ export const selectors = {
       .map((u) => u.name);
     const roomCleaners = s.rooms.map((r) => r.cleaner).filter(Boolean) as string[];
     const all = Array.from(new Set([...staffCleaners, ...roomCleaners])).filter(Boolean);
-    return all.length > 0 ? all : ["Maria Silva", "Inês Duarte", "Kadir Yılmaz", "Alina Popescu"];
+    return all;
   },
   floors: (s: AppState) => {
     const floorList = Array.from(new Set(s.rooms.map((r) => r.floor))).sort((a, b) => a - b);
-    return floorList.length > 0 ? floorList : [1, 2, 3, 4];
+    return floorList;
   },
 };
 

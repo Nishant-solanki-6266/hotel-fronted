@@ -652,20 +652,83 @@ export function applyPmsLiveUpdate(eventType: string, data: any) {
       text: data.text,
       meta: data.meta || "Mews PMS",
     });
-  } else if (eventType === "conversation:updated" && data?.conversationId) {
-    set((s) => ({
-      conversations: s.conversations.map((c) =>
-        c.id === data.conversationId
-          ? {
+  } else if (eventType === "conversation:updated" && (data?.conversationId || data?.conversation)) {
+    const convId = data.conversationId || data.conversation?.id;
+    set((s) => {
+      const exists = s.conversations.some((c) => c.id === convId);
+      if (exists) {
+        return {
+          conversations: s.conversations.map((c) => {
+            if (c.id !== convId) return c;
+            const newMessages = data.conversation?.messages || c.messages;
+            return {
               ...c,
+              ...(data.conversation || {}),
               unread: (c.unread || 0) + 1,
-              lastAt: data.time || "just now",
-              summary: data.lastMessage ? `"${data.lastMessage}"` : c.summary,
-            }
-          : c,
-      ),
-    }));
-    toast(`New Guest Email: ${data.subject || "Guest Inquiry"}`, "good", data.guestName ? `From ${data.guestName}` : "Guest Mailbox");
+              lastAt: data.time || data.conversation?.lastAt || "just now",
+              summary: data.lastMessage ? `"${data.lastMessage}"` : data.conversation?.summary || c.summary,
+              messages: newMessages,
+            };
+          }),
+        };
+      } else if (data.conversation) {
+        return {
+          conversations: [data.conversation as Conversation, ...s.conversations],
+        };
+      } else {
+        const fallbackConv: Conversation = {
+          id: convId,
+          stage: "pre-arrival",
+          channels: [data.channel || "email"],
+          primaryChannel: data.channel || "email",
+          aiStatus: "ai-handling",
+          sentiment: "neutral",
+          subject: data.subject || "Guest Inquiry",
+          summary: data.lastMessage ? `"${data.lastMessage}"` : "New guest message received",
+          suggestedReply: `Dear ${data.guestName || "Guest"},\n\nThank you for reaching out to us. We have received your message and will assist you shortly.\n\nWarm regards,\nFront Desk Team`,
+          knowledgeUsed: [],
+          upsellIdeas: [],
+          taskIds: [],
+          unread: 1,
+          lastAt: data.time || "just now",
+          aiHandledCount: 0,
+          guest: {
+            id: data.guestId || `gst_${convId}`,
+            name: data.guestName || "Guest",
+            country: "BE",
+            language: "en",
+            vip: false,
+            previousStays: 0,
+            tags: [data.channel === "whatsapp" ? "WhatsApp Contact" : "Email Contact"],
+            reservation: {
+              number: "ENQ-" + String(convId).slice(-4).toUpperCase(),
+              arrival: "Today",
+              departure: "Pending",
+              nights: 1,
+              adults: 1,
+              children: 0,
+              roomType: "Standard Room",
+              status: "Enquiry",
+              rate: "€0",
+            },
+          },
+          messages: [
+            {
+              id: `m-${Date.now()}`,
+              author: "guest",
+              channel: data.channel || "email",
+              body: data.lastMessage || data.subject || "Guest inquiry",
+              at: data.time || "just now",
+            },
+          ],
+        };
+        return {
+          conversations: [fallbackConv, ...s.conversations],
+        };
+      }
+    });
+    const channelLabel = data.channel === "whatsapp" ? "WhatsApp" : "Email";
+    toast(`New Guest ${channelLabel}: ${data.subject || data.guestName || "Inquiry"}`, "good", data.guestName ? `From ${data.guestName}` : `Guest ${channelLabel}`);
   }
 }
 
@@ -1759,13 +1822,40 @@ if (typeof window !== "undefined") {
       if (waThreads && Array.isArray(waThreads) && waThreads.length > 0) {
         set(() => ({ waThreads }));
       }
-      if (convs && Array.isArray(convs)) {
-        set((s) => ({
-          conversations: s.conversations.map((c) => {
-            const remote = convs.find((rc: any) => rc.id === c.id);
-            return remote ? { ...c, ...remote, messages: remote.messages || c.messages } : c;
-          }),
-        }));
+      if (convs && Array.isArray(convs) && convs.length > 0) {
+        set((s) => {
+          const remoteMapped: Conversation[] = convs.map((rc: any) => ({
+            ...rc,
+            channels: Array.isArray(rc.channels) && rc.channels.length > 0 ? rc.channels : [rc.primaryChannel || "email"],
+            messages: Array.isArray(rc.messages) ? rc.messages : [],
+            taskIds: Array.isArray(rc.taskIds) ? rc.taskIds : [],
+            knowledgeUsed: Array.isArray(rc.knowledgeUsed) ? rc.knowledgeUsed : [],
+            upsellIdeas: Array.isArray(rc.upsellIdeas) ? rc.upsellIdeas : [],
+            guest: {
+              ...rc.guest,
+              tags: Array.isArray(rc.guest?.tags) ? rc.guest.tags : [],
+              reservation: rc.guest?.reservation || rc.guest?.reservations?.[0] || {
+                number: "N/A",
+                arrival: "—",
+                departure: "—",
+                nights: 1,
+                adults: 1,
+                children: 0,
+                roomType: "Standard",
+                status: "Confirmed",
+                rate: "—",
+              },
+            },
+          }));
+
+          const merged = [...remoteMapped];
+          for (const local of s.conversations) {
+            if (!merged.some((m) => m.id === local.id)) {
+              merged.push(local);
+            }
+          }
+          return { conversations: merged };
+        });
       }
     } catch {
       // Quiet fail on network flutter

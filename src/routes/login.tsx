@@ -237,25 +237,25 @@ function Login() {
             <Button type="submit" className="mt-5 w-full" disabled={busy || !email.trim()} icon={ArrowRight}>
               {busy ? "Opening…" : selectedUser ? `Sign in as ${selectedUser.name.split(" ")[0]}` : "Sign In"}
             </Button>
-          </form>
+            </form>
 
-          <p className="mt-4 text-[11.5px] leading-snug text-ink-4">
-            Demo accounts — pick any of the five to see that role's workspace. A manager can invite colleagues and change
-            roles under Settings.
-          </p>
-
-          <div className="mt-5 border-t border-line-soft pt-4">
-            <p className="text-[12.5px] font-medium text-ink">New hotel?</p>
-            <p className="mt-0.5 text-[11.5px] leading-snug text-ink-4">
-              Start from nothing: the onboarding wizard walks the manager through the profile, the PMS, email, both WhatsApp
-              numbers, the knowledge base, the team and the AI rules.
+            <p className="mt-4 text-[11.5px] leading-snug text-ink-4">
+              Demo accounts — pick any of the five to see that role's workspace. A manager can invite colleagues and change
+              roles under Settings.
             </p>
-            <Button variant="outline" size="sm" className="mt-2.5" icon={Wand2} onClick={firstLogin} disabled={busy}>
-              Set up a new hotel
-            </Button>
+
+            <div className="mt-5 border-t border-line-soft pt-4">
+              <p className="text-[12.5px] font-medium text-ink">New hotel?</p>
+              <p className="mt-0.5 text-[11.5px] leading-snug text-ink-4">
+                Start from nothing: the onboarding wizard walks the manager through the profile, the PMS, email, both WhatsApp
+                numbers, the knowledge base, the team and the AI rules.
+              </p>
+              <Button variant="outline" size="sm" className="mt-2.5" icon={Wand2} onClick={firstLogin} disabled={busy}>
+                Set up a new hotel
+              </Button>
+            </div>
           </div>
-        </div>
-      </section>
-    </div>
-  );
-}
+        </section>
+      </div>
+    );
+  }

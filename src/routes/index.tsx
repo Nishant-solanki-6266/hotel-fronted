@@ -17,7 +17,7 @@ function Entry() {
   useEffect(() => {
     if (!session.ready) return;
     if (!user) {
-      navigate({ to: "/login" });
+      navigate({ to: "/login", replace: true });
       return;
     }
     // A hotel that has not finished setup goes to the wizard first; only a manager can run it.

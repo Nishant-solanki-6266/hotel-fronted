@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { roleLabel, signOut, useCurrentUser, useSession } from "@/lib/session";
-import { selectors, useApp } from "@/lib/store";
+import { initBackendSync, selectors, useApp } from "@/lib/store";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -82,13 +82,11 @@ export function AppShell({
 
   useEffect(() => {
     if (session.ready && !session.userId) {
-      navigate({ to: "/login" });
+      navigate({ to: "/login", replace: true });
     } else if (session.ready && session.userId) {
-      import("@/lib/store").then(({ initBackendSync }) => {
-        if (typeof initBackendSync === "function") {
-          initBackendSync();
-        }
-      });
+      if (typeof initBackendSync === "function") {
+        initBackendSync();
+      }
     }
   }, [session.ready, session.userId, navigate]);
 
@@ -214,7 +212,7 @@ export function AppShell({
                 <button
                   onClick={() => {
                     signOut();
-                    navigate({ to: "/login" });
+                    navigate({ to: "/login", replace: true });
                   }}
                   title="Sign out"
                   className="inline-flex size-7 items-center justify-center rounded-full text-ink-4 transition-colors hover:bg-paper-2 hover:text-ink"

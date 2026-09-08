@@ -20,7 +20,7 @@ function Onboarding() {
   }, []);
 
   useEffect(() => {
-    if (mounted && session.ready && !user) navigate({ to: "/login" });
+    if (mounted && session.ready && !user) navigate({ to: "/login", replace: true });
   }, [mounted, session.ready, user, navigate]);
 
   if (!mounted || !session.ready || !user) {

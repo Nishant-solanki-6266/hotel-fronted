@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2, RefreshCw, Server, Shield, AlertCircle } from "lucide-react";
 import { pmsOptions } from "@/lib/onboarding";
-import { connectPms, syncPmsWithBackend, useApp } from "@/lib/store";
+import { connectPms, disconnectPms, syncPmsWithBackend, useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Badge, Button, Card, Eyebrow, SectionTitle } from "./ui";
 import { ConnectionHealth } from "./ConnectionHealth";
@@ -50,6 +50,9 @@ export function OnboardingPmsStep() {
         <div className="mt-4 flex items-center gap-2">
           <Button size="sm" variant="outline" icon={syncing ? Loader2 : RefreshCw} disabled={syncing} onClick={handleSyncNow}>
             {syncing ? "Syncing with Mews…" : "Test PMS Sync Now"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => disconnectPms()}>
+            Change credentials
           </Button>
         </div>
         <p className="mt-3 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[11.5px] leading-snug text-ink-4">

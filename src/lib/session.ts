@@ -1,7 +1,7 @@
 import { Store, useStore } from "@tanstack/react-store";
 import { api } from "./api";
 import { staff } from "./data";
-import { store } from "./store";
+import { initBackendSync, resetStoreState, store } from "./store";
 import type { Role, StaffUser } from "./types";
 
 const KEY = "hotelogx.session.v1";
@@ -55,8 +55,9 @@ export async function hydrateSession() {
         };
         window.localStorage.setItem(USER_KEY, JSON.stringify(freshUser));
         sessionStore.setState(() => ({ userId: freshUser.id, user: freshUser, ready: true }));
-        const { initBackendSync } = await import("./store");
-        initBackendSync();
+        if (typeof initBackendSync === "function") {
+          initBackendSync();
+        }
         return;
       }
     } catch {}
@@ -88,18 +89,61 @@ export async function signIn(userId: string, customUser?: StaffUser) {
   sessionStore.setState(() => ({ userId, user: customUser || demoFound || null, ready: true }));
 
   try {
-    const { initBackendSync } = await import("./store");
-    initBackendSync();
+    if (typeof initBackendSync === "function") {
+      initBackendSync();
+    }
   } catch {}
 }
 
 export function signOut() {
   if (typeof window !== "undefined") {
+    // Clear explicit authentication and user session keys
     window.localStorage.removeItem(KEY);
     window.localStorage.removeItem(USER_KEY);
     window.localStorage.removeItem("token");
+
+    // Remove any other hotelogx.*, tenant.*, or auth.* keys from localStorage
+    const localKeysToRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (
+        k &&
+        (k.startsWith("hotelogx.") ||
+          k.startsWith("hotelogx_") ||
+          k === "token" ||
+          k.startsWith("auth_") ||
+          k.startsWith("session_") ||
+          k.startsWith("tenant_"))
+      ) {
+        localKeysToRemove.push(k);
+      }
+    }
+    localKeysToRemove.forEach((k) => window.localStorage.removeItem(k));
+
+    // Clear sessionStorage authentication and tenant keys
+    const sessionKeysToRemove: string[] = [];
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const k = window.sessionStorage.key(i);
+      if (
+        k &&
+        (k.startsWith("hotelogx.") ||
+          k.startsWith("hotelogx_") ||
+          k === "token" ||
+          k.startsWith("auth_") ||
+          k.startsWith("session_") ||
+          k.startsWith("tenant_"))
+      ) {
+        sessionKeysToRemove.push(k);
+      }
+    }
+    sessionKeysToRemove.forEach((k) => window.sessionStorage.removeItem(k));
   }
+
+  // Reset in-memory session store
   sessionStore.setState(() => ({ userId: null, user: null, ready: true }));
+
+  // Reset in-memory application store (clears tenant-specific state)
+  resetStoreState();
 }
 
 export function useSession() {

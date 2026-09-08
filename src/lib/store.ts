@@ -216,6 +216,38 @@ export function useApp<T>(selector: (state: AppState) => T): T {
   return useStore(store, selector);
 }
 
+export function resetStoreState() {
+  store.setState(() => ({
+    conversations: [],
+    tasks: [],
+    rooms: [],
+    issues: [],
+    upsells: [],
+    activity: [],
+    waThreads: [],
+    aiRules: [],
+    knowledge: [],
+    hotelProfile: hotel,
+    users: staff,
+    subscription: defaultSubscription,
+    invoices: [],
+    onboarding: freshOnboarding(),
+    aiMode: "Autonomous",
+    integrations: {
+      pms: { provider: "Mews", connected: false, lastSync: "—" },
+      email: { provider: "google", account: "", connected: false },
+      whatsapp: {
+        connected: false,
+        number: "",
+        waba: "",
+        quality: "High",
+        templates: 0,
+      },
+    },
+    toasts: [],
+  }));
+}
+
 function set(updater: (state: AppState) => Partial<AppState>) {
   store.setState((s) => ({ ...s, ...updater(s) }));
 }
@@ -1227,11 +1259,57 @@ export async function syncKnowledgeWithBackend() {
 
 export function startOnboarding() {
   set(() => ({
+    hotelProfile: {
+      name: "",
+      legalName: "",
+      stars: 4,
+      roomsCount: 0,
+      address: "",
+      postcode: "",
+      city: "",
+      country: "",
+      timezone: "Europe/Brussels",
+      currency: "€",
+      phone: "",
+      email: "",
+      website: "",
+      bookingEngine: "",
+      whatsappNumber: "",
+      checkIn: "15:00",
+      checkOut: "11:00",
+      vatNumber: "",
+      description: "",
+    },
     onboarding: freshOnboarding(),
     integrations: {
       pms: { provider: "", connected: false, lastSync: "never" },
       email: { provider: "google", account: "", connected: false },
       whatsapp: { connected: false, number: "", waba: "", quality: "—", templates: 0 },
+    },
+  }));
+}
+
+export function disconnectPms() {
+  set((s) => ({
+    onboarding: {
+      ...s.onboarding,
+      pms: {
+        state: "not-started",
+        provider: "Mews",
+        propertyId: "",
+        propertyName: "",
+        lastSync: null,
+        error: null,
+      },
+      done: { ...s.onboarding.done, pms: false },
+    },
+    integrations: {
+      ...s.integrations,
+      pms: {
+        provider: "Mews",
+        connected: false,
+        lastSync: "never",
+      },
     },
   }));
 }
@@ -1595,6 +1673,13 @@ export const selectors = {
 };
 
 export async function initBackendSync() {
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("token");
+    const sessionUserId = window.localStorage.getItem("hotelogx.session.v1");
+    if (!token && !sessionUserId) {
+      return;
+    }
+  }
   try {
     const [
       rooms,
@@ -1630,8 +1715,9 @@ export async function initBackendSync() {
       api.getHotelProfile().catch(() => null),
     ]);
 
+    const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null;
     const freshProfile = hotelProfileData || onboardingData?.hotelProfile || onboardingData?.hotel;
-    if (freshProfile) {
+    if (freshProfile && !isFreshSetup) {
       set((s) => ({
         hotelProfile: { ...s.hotelProfile, ...freshProfile },
       }));
@@ -1724,61 +1810,64 @@ export async function initBackendSync() {
       }
     }
     if (onboardingData) {
-      const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
-      const emailDone = Boolean(onboardingData.done?.email);
-      const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
-      const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);
-      const waConnected = waGuestDone || waInternalDone;
+      const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null;
+      if (!isFreshSetup) {
+        const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
+        const emailDone = Boolean(onboardingData.done?.email);
+        const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
+        const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);
+        const waConnected = waGuestDone || waInternalDone;
 
-      set((s) => ({
-        onboarding: {
-          ...s.onboarding,
-          waTopology: onboardingData.waTopology || s.onboarding.waTopology,
-          complete: onboardingData.complete !== undefined ? onboardingData.complete : s.onboarding.complete,
-          done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done, pms: isPmsActuallyConnected } : s.onboarding.done,
-          pms: {
-            ...s.onboarding.pms,
-            state: isPmsActuallyConnected ? "connected" : "not-started",
-            provider: isPmsActuallyConnected ? (pmsStatusData?.provider || "Mews") : null,
-            propertyId: pmsStatusData?.propertyId || s.onboarding.pms.propertyId,
-            lastSync: pmsStatusData?.lastSyncAt || (isPmsActuallyConnected ? "Live" : null),
+        set((s) => ({
+          onboarding: {
+            ...s.onboarding,
+            waTopology: onboardingData.waTopology || s.onboarding.waTopology,
+            complete: onboardingData.complete !== undefined ? onboardingData.complete : s.onboarding.complete,
+            done: onboardingData.done ? { ...s.onboarding.done, ...onboardingData.done, pms: isPmsActuallyConnected } : s.onboarding.done,
+            pms: {
+              ...s.onboarding.pms,
+              state: isPmsActuallyConnected ? "connected" : "not-started",
+              provider: isPmsActuallyConnected ? (pmsStatusData?.provider || "Mews") : null,
+              propertyId: pmsStatusData?.propertyId || s.onboarding.pms.propertyId,
+              lastSync: pmsStatusData?.lastSyncAt || (isPmsActuallyConnected ? "Live" : null),
+            },
+            email: {
+              ...s.onboarding.email,
+              state: emailDone ? "connected" : "not-started",
+              address: onboardingData.hotelProfile?.email || s.hotelProfile.email || "",
+            },
+            waGuest: {
+              ...s.onboarding.waGuest,
+              state: waGuestDone ? "connected" : "not-started",
+              displayPhoneNumber: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || null,
+            },
+            waInternal: {
+              ...s.onboarding.waInternal,
+              state: waInternalDone ? "connected" : "not-started",
+            },
           },
-          email: {
-            ...s.onboarding.email,
-            state: emailDone ? "connected" : "not-started",
-            address: onboardingData.hotelProfile?.email || s.hotelProfile.email || "",
+          hotelProfile: freshProfile ? { ...s.hotelProfile, ...freshProfile } : s.hotelProfile,
+          integrations: {
+            pms: {
+              provider: pmsStatusData?.provider || "Mews",
+              connected: isPmsActuallyConnected,
+              lastSync: pmsStatusData?.lastSyncAt ? "Live" : isPmsActuallyConnected ? "Live" : "Not connected",
+            },
+            email: {
+              provider: "google",
+              account: (onboardingData.hotelProfile?.email || s.hotelProfile.email || ""),
+              connected: emailDone,
+            },
+            whatsapp: {
+              connected: waConnected,
+              number: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || "",
+              waba: waConnected ? `${s.hotelProfile.legalName || 'Hotel'} · WABA Connected` : "",
+              quality: "High",
+              templates: waConnected ? 11 : 0,
+            },
           },
-          waGuest: {
-            ...s.onboarding.waGuest,
-            state: waGuestDone ? "connected" : "not-started",
-            displayPhoneNumber: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || null,
-          },
-          waInternal: {
-            ...s.onboarding.waInternal,
-            state: waInternalDone ? "connected" : "not-started",
-          },
-        },
-        hotelProfile: freshProfile ? { ...s.hotelProfile, ...freshProfile } : s.hotelProfile,
-        integrations: {
-          pms: {
-            provider: pmsStatusData?.provider || "Mews",
-            connected: isPmsActuallyConnected,
-            lastSync: pmsStatusData?.lastSyncAt ? "Live" : isPmsActuallyConnected ? "Live" : "Not connected",
-          },
-          email: {
-            provider: "google",
-            account: (onboardingData.hotelProfile?.email || s.hotelProfile.email || ""),
-            connected: emailDone,
-          },
-          whatsapp: {
-            connected: waConnected,
-            number: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || "",
-            waba: waConnected ? `${s.hotelProfile.legalName || 'Hotel'} · WABA Connected` : "",
-            quality: "High",
-            templates: waConnected ? 11 : 0,
-          },
-        },
-      }));
+        }));
+      }
     }
     if (waThreadsData && Array.isArray(waThreadsData)) {
       set(() => ({ waThreads: waThreadsData }));
@@ -1794,6 +1883,10 @@ if (typeof window !== "undefined") {
   // Multi-device live sync loop (every 8 seconds)
   setInterval(async () => {
     try {
+      const token = window.localStorage.getItem("token");
+      const sessionUserId = window.localStorage.getItem("hotelogx.session.v1");
+      if (!token && !sessionUserId) return;
+
       const [rooms, tasks, issues, convs, waThreads, users, profile, upsellsData] = await Promise.all([
         api.getRooms().catch(() => null),
         api.getTasks().catch(() => null),
@@ -1804,7 +1897,8 @@ if (typeof window !== "undefined") {
         api.getHotelProfile().catch(() => null),
         api.getUpsells().catch(() => null),
       ]);
-      if (profile) {
+      const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null;
+      if (profile && !isFreshSetup) {
         set((s) => ({ hotelProfile: { ...s.hotelProfile, ...profile } }));
       }
       if (rooms && Array.isArray(rooms)) {

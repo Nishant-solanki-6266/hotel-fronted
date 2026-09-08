@@ -41,6 +41,16 @@ export function useRealtimeSync(hotelId: string = "hotel-mercier") {
         }
       });
 
+      es.addEventListener("room:status_changed", (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          applyPmsLiveUpdate("room:status_changed", data);
+        } catch (err) {
+          console.error("[Realtime] Error parsing room:status_changed", err);
+        }
+      });
+
+
       es.addEventListener("activity:new", (event) => {
         try {
           const data = JSON.parse(event.data);

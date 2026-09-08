@@ -1515,18 +1515,27 @@ export function failEmailConnection(message: string) {
 }
 
 /**
- * Stands in for the callback of Meta's Embedded Signup: the identifiers arrive from
- * Meta, we store them and never ask the manager for a token.
+ * Handles the callback of Meta's Embedded Signup or simulator: stores verified identifiers
+ * and synchronizes with backend multi-tenant database.
  */
-export function connectWhatsAppNumber(connectionType: WaConnectionType, phone: string) {
-  const ids = mockMetaIdentifiers(connectionType, phone);
+export function connectWhatsAppNumber(
+  connectionType: WaConnectionType,
+  phone: string,
+  metaData?: { wabaId?: string; phoneNumberId?: string; displayPhoneNumber?: string; code?: string }
+) {
+  const fallbackIds = mockMetaIdentifiers(connectionType, phone);
+  const wabaId = metaData?.wabaId || fallbackIds.wabaId;
+  const phoneNumberId = metaData?.phoneNumberId || fallbackIds.phoneNumberId;
+  const displayPhoneNumber = metaData?.displayPhoneNumber || phone || fallbackIds.displayPhoneNumber;
+  const currentHotelId = state.hotelProfile.id || "hotel";
+
   const connection: WaConnection = {
     state: "connected",
     connectionType,
-    hotelId: ids.hotelId,
-    wabaId: ids.wabaId,
-    phoneNumberId: ids.phoneNumberId,
-    displayPhoneNumber: ids.displayPhoneNumber,
+    hotelId: currentHotelId,
+    wabaId,
+    phoneNumberId,
+    displayPhoneNumber,
     canSend: true,
     canReceive: true,
     lastActivity: "just now",
@@ -1551,8 +1560,8 @@ export function connectWhatsAppNumber(connectionType: WaConnectionType, phone: s
         ...s.integrations,
         whatsapp: {
           connected: true,
-          number: connectionType === "guest" || single ? phone : s.integrations.whatsapp.number || phone,
-          waba: `${s.hotelProfile.legalName} · ${ids.wabaId}`,
+          number: connectionType === "guest" || single ? displayPhoneNumber : s.integrations.whatsapp.number || displayPhoneNumber,
+          waba: `${s.hotelProfile.legalName || s.hotelProfile.name} · ${wabaId}`,
           quality: "Pending",
           templates: 0,
         },
@@ -1560,8 +1569,26 @@ export function connectWhatsAppNumber(connectionType: WaConnectionType, phone: s
     };
   });
 
-  api.saveOnboardingStep(connectionType === "guest" ? "wa-guest" : "wa-internal", { phone });
-  toast(`${connectionType === "guest" ? "Guest" : "Internal"} WhatsApp connected`, "good", phone);
+  // Call backend Embedded Signup exchange or onboarding persistence
+  if (metaData?.code) {
+    api.exchangeMetaEmbeddedSignup({
+      code: metaData.code,
+      wabaId,
+      phoneNumberId,
+      displayPhoneNumber,
+      targetType: connectionType,
+      hotelId: currentHotelId,
+    });
+  }
+
+  api.saveOnboardingStep(connectionType === "guest" ? "wa-guest" : "wa-internal", {
+    phone: displayPhoneNumber,
+    displayPhoneNumber,
+    phoneNumberId,
+    wabaId,
+    connectionType,
+  });
+  toast(`${connectionType === "guest" ? "Guest" : "Internal"} WhatsApp connected`, "good", displayPhoneNumber);
 }
 
 export function testWhatsApp(connectionType: WaConnectionType) {
@@ -1715,7 +1742,8 @@ export async function initBackendSync() {
       api.getHotelProfile().catch(() => null),
     ]);
 
-    const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null;
+    const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
+    const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
     const freshProfile = hotelProfileData || onboardingData?.hotelProfile || onboardingData?.hotel;
     if (freshProfile && !isFreshSetup) {
       set((s) => ({
@@ -1810,7 +1838,8 @@ export async function initBackendSync() {
       }
     }
     if (onboardingData) {
-      const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null;
+      const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
+      const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
       if (!isFreshSetup) {
         const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
         const emailDone = Boolean(onboardingData.done?.email);
@@ -1897,7 +1926,8 @@ if (typeof window !== "undefined") {
         api.getHotelProfile().catch(() => null),
         api.getUpsells().catch(() => null),
       ]);
-      const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null;
+      const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
+      const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
       if (profile && !isFreshSetup) {
         set((s) => ({ hotelProfile: { ...s.hotelProfile, ...profile } }));
       }

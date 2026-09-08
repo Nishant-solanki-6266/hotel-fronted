@@ -298,5 +298,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  // WhatsApp Embedded Signup
+  exchangeMetaEmbeddedSignup: (data: {
+    code?: string;
+    wabaId?: string;
+    phoneNumberId?: string;
+    displayPhoneNumber?: string;
+    targetType?: string;
+    hotelId?: string;
+  }) =>
+    request<any>('/whatsapp/embedded-signup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
+
 

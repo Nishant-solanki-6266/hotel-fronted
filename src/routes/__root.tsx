@@ -50,6 +50,31 @@ function NotFound() {
 function RootDocument() {
   useEffect(() => {
     hydrateSession();
+
+    // Dynamically initialize Facebook SDK for Meta WhatsApp Embedded Signup if configured
+    const metaAppId = import.meta.env.VITE_META_APP_ID;
+    if (metaAppId && typeof window !== "undefined") {
+      window.fbAsyncInit = function () {
+        if (window.FB) {
+          window.FB.init({
+            appId: metaAppId,
+            cookie: true,
+            xfbml: true,
+            version: "v19.0",
+          });
+        }
+      };
+
+      if (!document.getElementById("facebook-jssdk")) {
+        const js = document.createElement("script");
+        js.id = "facebook-jssdk";
+        js.src = "https://connect.facebook.net/en_US/sdk.js";
+        js.async = true;
+        js.defer = true;
+        js.crossOrigin = "anonymous";
+        document.body.appendChild(js);
+      }
+    }
   }, []);
 
   return (

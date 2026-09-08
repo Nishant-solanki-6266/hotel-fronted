@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Building2, Check, Loader2, MessageCircle, Phone, ShieldCheck, X } from "lucide-react";
 import { waLabel } from "@/lib/onboarding";
 import { connectWhatsAppNumber, testWhatsApp, toast, useApp } from "@/lib/store";
@@ -6,6 +6,13 @@ import type { WaConnectionType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button, Card, Eyebrow, SectionTitle } from "./ui";
 import { ConnectionHealth } from "./ConnectionHealth";
+
+declare global {
+  interface Window {
+    FB?: any;
+    fbAsyncInit?: () => void;
+  }
+}
 
 type SignupStage = "login" | "portfolio" | "waba" | "number" | "finishing";
 
@@ -33,9 +40,8 @@ const stageCopy: Record<SignupStage, { title: string; body: string }> = {
 };
 
 /**
- * Stands in for Meta's Embedded Signup. The real flow opens Meta's own dialog and
- * returns waba_id / phone_number_id through the callback; the manager never copies a
- * token. The stages here mirror what they will actually be asked.
+ * Stands in for Meta's Embedded Signup when running in test/simulator mode.
+ * The stages here mirror what they will actually be asked in Meta.
  */
 function EmbeddedSignup({
   connectionType,
@@ -45,7 +51,7 @@ function EmbeddedSignup({
 }: {
   connectionType: WaConnectionType;
   suggestedNumber: string;
-  onDone: (phone: string) => void;
+  onDone: (phone: string, metaIds?: { wabaId?: string; phoneNumberId?: string; displayPhoneNumber?: string; code?: string }) => void;
   onCancel: () => void;
 }) {
   const [stage, setStage] = useState<SignupStage>("login");
@@ -62,6 +68,7 @@ function EmbeddedSignup({
       window.setTimeout(() => onDone(phone.trim()), 1100);
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/25 p-4">
@@ -188,6 +195,60 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
 
   const suggested = connectionType === "guest" ? profile.whatsappNumber : "+32 3 227 41 09";
 
+  const launchWhatsAppSignup = () => {
+    const metaAppId = import.meta.env.VITE_META_APP_ID;
+    const metaConfigId = import.meta.env.VITE_META_CONFIG_ID;
+
+    if (typeof window !== "undefined" && window.FB && metaConfigId) {
+      let capturedWabaId = "";
+      let capturedPhoneId = "";
+      let capturedPhone = suggested;
+
+      const sessionListener = (event: MessageEvent) => {
+        if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+        try {
+          const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          if (data.type === "WA_EMBEDDED_SIGNUP") {
+            if (data.data?.waba_id) capturedWabaId = data.data.waba_id;
+            if (data.data?.phone_number_id) capturedPhoneId = data.data.phone_number_id;
+            if (data.data?.display_phone_number) capturedPhone = data.data.display_phone_number;
+          }
+        } catch {}
+      };
+
+      window.addEventListener("message", sessionListener);
+
+      window.FB.login(
+        (response: any) => {
+          window.removeEventListener("message", sessionListener);
+          if (response?.authResponse?.code) {
+            connectWhatsAppNumber(connectionType, capturedPhone, {
+              code: response.authResponse.code,
+              wabaId: capturedWabaId,
+              phoneNumberId: capturedPhoneId,
+              displayPhoneNumber: capturedPhone,
+            });
+          } else {
+            toast("Meta signup cancelled", "urgent", "You can retry or use simulator mode");
+          }
+        },
+        {
+          config_id: metaConfigId,
+          response_type: "code",
+          override_default_response_type: true,
+          extras: {
+            feature: "whatsapp_embedded_signup",
+            version: 2,
+          },
+        }
+      );
+      return;
+    }
+
+    // Fallback to built-in interactive simulator
+    setSignup(true);
+  };
+
   if (connection.state === "connected") {
     return (
       <Card>
@@ -278,7 +339,7 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
           })}
         </div>
 
-        <Button className="mt-3.5" icon={MessageCircle} onClick={() => setSignup(true)}>
+        <Button className="mt-3.5" icon={MessageCircle} onClick={launchWhatsAppSignup}>
           Connect WhatsApp
         </Button>
 
@@ -294,12 +355,13 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
           connectionType={connectionType}
           suggestedNumber={suggested}
           onCancel={() => setSignup(false)}
-          onDone={(phone) => {
+          onDone={(phone, metaIds) => {
             setSignup(false);
-            connectWhatsAppNumber(connectionType, phone);
+            connectWhatsAppNumber(connectionType, phone, metaIds);
           }}
         />
       )}
     </>
   );
 }
+

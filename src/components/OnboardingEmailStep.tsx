@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Check, ChevronDown, Loader2, Lock, Mail, Search, Settings2, ShieldCheck } from "lucide-react";
 import { blankSettings, isEmailish } from "@/lib/onboarding";
-import { connectEmail, runEmailDetection, useApp } from "@/lib/store";
+import { connectEmail, runEmailDetection, toast, useApp } from "@/lib/store";
+import { api } from "@/lib/api";
 import type { EmailServerSettings } from "@/lib/types";
 import { Badge, Button, Card, Eyebrow, SectionTitle } from "./ui";
 import { ConnectionHealth } from "./ConnectionHealth";
@@ -55,12 +56,53 @@ export function OnboardingEmailStep() {
   const detection = email.detection;
   const connected = email.state === "connected";
 
+  // Handle return from Real Google OAuth
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthStatus = urlParams.get("oauth_status");
+
+    if (oauthStatus === "success") {
+      const emailAccount = urlParams.get("email") || address;
+      toast("Google Mailbox Connected", "good", `${emailAccount} · Google Workspace`);
+      connectEmail("oauth");
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    } else if (oauthStatus === "error") {
+      const msg = urlParams.get("message") || "Google authorization failed";
+      toast("Could not connect Google mailbox", "urgent", decodeURIComponent(msg));
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
+  }, []);
+
   const detect = async () => {
     setBusy(true);
     const result = await runEmailDetection(address.trim());
     setBusy(false);
     setManual(result.settings ?? blankSettings);
     setAdvanced(result.method === "manual");
+  };
+
+  const handleContinueWithOAuth = async (provider: "google" | "microsoft") => {
+    if (provider === "google") {
+      setBusy(true);
+      try {
+        const res = await api.getGoogleOAuthUrl("/onboarding");
+        if (res && res.url) {
+          window.location.href = res.url;
+          return;
+        } else {
+          toast("Google OAuth error", "urgent", "Could not generate Google authorization URL");
+          setBusy(false);
+        }
+      } catch (err: any) {
+        toast("Google OAuth error", "urgent", err?.message || "Please verify Google OAuth credentials on the server");
+        setBusy(false);
+      }
+    } else {
+      setOauth("microsoft");
+    }
   };
 
   if (connected) {
@@ -146,7 +188,8 @@ export function OnboardingEmailStep() {
                 <Button
                   className="mt-3"
                   icon={ArrowRight}
-                  onClick={() => setOauth(detection.provider === "microsoft" ? "microsoft" : "google")}
+                  disabled={busy}
+                  onClick={() => handleContinueWithOAuth(detection.provider === "microsoft" ? "microsoft" : "google")}
                 >
                   Continue with {detection.provider === "microsoft" ? "Microsoft" : "Google"}
                 </Button>

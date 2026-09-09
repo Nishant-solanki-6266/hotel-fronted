@@ -288,12 +288,16 @@ export const api = {
       body: JSON.stringify(data),
     }),
   // Email Integration
+  getGoogleOAuthUrl: (redirectBack: string = '/onboarding') =>
+    request<{ url: string; hotelId: string }>(`/email/oauth/google?redirectBack=${encodeURIComponent(redirectBack)}`),
+  syncGmail: () =>
+    request<any>('/email/sync', { method: 'POST' }),
   testEmailConnection: (data: { email: string; password?: string; host?: string; port?: number; method?: string }) =>
     request<any>('/email/test-connection', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  sendGuestEmail: (data: { conversationId?: string; toEmail: string; subject?: string; text: string; author?: string }) =>
+  sendGuestEmail: (data: { conversationId?: string; toEmail: string; subject?: string; text: string; author?: string; threadId?: string }) =>
     request<any>('/email/send', {
       method: 'POST',
       body: JSON.stringify(data),

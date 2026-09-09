@@ -1290,6 +1290,12 @@ export function startOnboarding() {
       email: { provider: "google", account: "", connected: false },
       whatsapp: { connected: false, number: "", waba: "", quality: "—", templates: 0 },
     },
+    rooms: [],
+    tasks: [],
+    issues: [],
+    conversations: [],
+    upsells: [],
+    activity: [],
   }));
 }
 

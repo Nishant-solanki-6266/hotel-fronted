@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
 import { updateHotelProfile, useApp } from "@/lib/store";
 import type { HotelProfile } from "@/lib/types";
@@ -28,14 +28,13 @@ export function OnboardingProfileStep({ onDraftChange }: { onDraftChange?: (draf
   const profile = useApp((s) => s.hotelProfile);
   const [draft, setDraft] = useState<HotelProfile>(profile);
 
+  useEffect(() => {
+    onDraftChange?.(draft);
+  }, [draft, onDraftChange]);
+
   const dirty = JSON.stringify(draft) !== JSON.stringify(profile);
   const setField = (key: ProfileTextKey, next: string) =>
-    setDraft((d) => {
-      const copy = { ...d };
-      copy[key] = next;
-      onDraftChange?.(copy);
-      return copy;
-    });
+    setDraft((d) => ({ ...d, [key]: next }));
 
   return (
     <Card>
@@ -71,11 +70,7 @@ export function OnboardingProfileStep({ onDraftChange }: { onDraftChange?: (draf
             inputMode="numeric"
             onChange={(e) => {
               const roomsVal = Number(e.target.value.replace(/\D/g, "")) || 0;
-              setDraft((d) => {
-                const copy = { ...d, rooms: roomsVal };
-                onDraftChange?.(copy);
-                return copy;
-              });
+              setDraft((d) => ({ ...d, rooms: roomsVal }));
             }}
             className="tnum mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 font-mono text-[12.5px] outline-none focus:border-pine-400"
           />
@@ -86,11 +81,7 @@ export function OnboardingProfileStep({ onDraftChange }: { onDraftChange?: (draf
             value={draft.stars}
             onChange={(e) => {
               const starsVal = Number(e.target.value);
-              setDraft((d) => {
-                const copy = { ...d, stars: starsVal };
-                onDraftChange?.(copy);
-                return copy;
-              });
+              setDraft((d) => ({ ...d, stars: starsVal }));
             }}
             className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] outline-none focus:border-pine-400"
           >
@@ -115,9 +106,7 @@ export function OnboardingProfileStep({ onDraftChange }: { onDraftChange?: (draf
                   setDraft((d) => {
                     const langs = d.languages || [];
                     const nextLangs = on ? langs.filter((l) => l !== language) : [...langs, language];
-                    const copy = { ...d, languages: nextLangs };
-                    onDraftChange?.(copy);
-                    return copy;
+                    return { ...d, languages: nextLangs };
                   })
                 }
                 className={cn(
@@ -142,11 +131,7 @@ export function OnboardingProfileStep({ onDraftChange }: { onDraftChange?: (draf
           rows={3}
           onChange={(e) => {
             const desc = e.target.value;
-            setDraft((d) => {
-              const copy = { ...d, description: desc };
-              onDraftChange?.(copy);
-              return copy;
-            });
+            setDraft((d) => ({ ...d, description: desc }));
           }}
           placeholder="A 48-room townhouse hotel five minutes from the station…"
           className="mt-1 w-full resize-none rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] leading-relaxed outline-none focus:border-pine-400"

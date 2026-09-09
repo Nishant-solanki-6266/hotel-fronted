@@ -1267,7 +1267,7 @@ export function startOnboarding() {
       name: "",
       legalName: "",
       stars: 4,
-      roomsCount: 0,
+      rooms: 0,
       address: "",
       postcode: "",
       city: "",
@@ -1282,6 +1282,7 @@ export function startOnboarding() {
       checkIn: "15:00",
       checkOut: "11:00",
       vatNumber: "",
+      languages: ["en"],
       description: "",
     },
     onboarding: freshOnboarding(),
@@ -1559,7 +1560,7 @@ export function connectWhatsAppNumber(
   const wabaId = metaData?.wabaId || fallbackIds.wabaId;
   const phoneNumberId = metaData?.phoneNumberId || fallbackIds.phoneNumberId;
   const displayPhoneNumber = metaData?.displayPhoneNumber || phone || fallbackIds.displayPhoneNumber;
-  const currentHotelId = state.hotelProfile.id || "hotel";
+  const currentHotelId = (store.state.hotelProfile as any)?.id || "hotel";
 
   const connection: WaConnection = {
     state: "connected",

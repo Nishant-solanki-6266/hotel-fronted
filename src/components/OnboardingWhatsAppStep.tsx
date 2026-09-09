@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowRight, Building2, Check, Loader2, MessageCircle, Phone, ShieldCheck, X } from "lucide-react";
 import { waLabel } from "@/lib/onboarding";
 import { connectWhatsAppNumber, testWhatsApp, toast, useApp } from "@/lib/store";
@@ -196,7 +196,6 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
   const suggested = connectionType === "guest" ? profile.whatsappNumber : "+32 3 227 41 09";
 
   const launchWhatsAppSignup = () => {
-    const metaAppId = import.meta.env.VITE_META_APP_ID;
     const metaConfigId = import.meta.env.VITE_META_CONFIG_ID;
 
     if (typeof window !== "undefined" && window.FB && metaConfigId) {

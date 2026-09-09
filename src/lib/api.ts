@@ -16,7 +16,7 @@ async function getOrRefreshToken(): Promise<string | null> {
       const parsed = JSON.parse(userJson);
       email = parsed.email;
       userId = parsed.id;
-    } catch {}
+    } catch { }
   }
 
   if (!email) {
@@ -44,7 +44,7 @@ async function getOrRefreshToken(): Promise<string | null> {
         return fetchedToken;
       }
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -144,7 +144,7 @@ export const api = {
       body: JSON.stringify({ assignee }),
     }),
 
-    // Auth
+  // Auth
   login: (credentials: { email?: string; password?: string; userId?: string }) =>
     request<{ token: string; user: any }>('/auth/login', {
       method: 'POST',
@@ -157,7 +157,6 @@ export const api = {
     }),
   getMe: () => request<any>('/auth/me'),
 
-  // PMS Integration (Mews)
   connectPms: (provider: string, propertyId: string) =>
     request<any>('/pms/connect', {
       method: 'POST',
@@ -168,6 +167,11 @@ export const api = {
     request<any>('/pms/sync', {
       method: 'POST',
     }),
+  getPmsRooms: () => request<any[]>('/pms/rooms'),
+  getPmsReservations: () => request<any[]>('/pms/reservations'),
+  checkAvailability: (params?: { checkIn?: string; checkOut?: string }) =>
+    request<any>(`/pms/availability${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
+
 
   // Conversations / Chat
   getConversations: () => request<any[]>('/conversations'),

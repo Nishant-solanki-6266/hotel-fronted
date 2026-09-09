@@ -384,3 +384,48 @@ export interface OnboardingState {
   waInternal: WaConnection;
   invites: OnboardingInvite[];
 }
+
+export interface MewsEnterpriseConfig {
+  id: string;
+  name: string;
+  currencies: string[];
+  timeZoneIdentifier: string;
+}
+
+export interface MewsSpace {
+  id: string;
+  number: string;
+  floor: number;
+  category: string;
+  status: RoomStatus;
+  occupied: boolean;
+}
+
+export interface MewsReservation {
+  id: string;
+  number: string;
+  guestName: string;
+  assignedSpaceId?: string;
+  roomNumber?: string;
+  startUtc: string;
+  endUtc: string;
+  adultCount: number;
+  childCount: number;
+  rateString: string;
+  status: string;
+  isVip: boolean;
+}
+
+export interface MewsFolio {
+  reservationNumber: string;
+  room: string;
+  arrival: string;
+  departure: string;
+  nights: number;
+  adults: number;
+  children: number;
+  category: string;
+  rate: string;
+  status: string;
+}
+

@@ -641,23 +641,27 @@ export async function setRoomStatus(
  * Apply live updates from Mews PMS Webhook stream without requiring full page refresh
  */
 export function applyPmsLiveUpdate(eventType: string, data: any) {
-  if (eventType === "pms:room_updated" && data?.roomNumber) {
-    const roomNum = String(data.roomNumber);
+  if ((eventType === "pms:room_updated" || eventType === "room:status_changed") && (data?.roomNumber || data?.number)) {
+    const roomNum = String(data.roomNumber || data.number);
     const status = data.status as RoomStatus;
     set((s) => ({
       rooms: s.rooms.map((r) =>
         r.number === roomNum
           ? {
             ...r,
-            status,
-            updatedAt: data.time || "just now",
+            status: status || r.status,
+            cleaner: data.cleaner !== undefined ? data.cleaner : r.cleaner,
+            updatedAt: data.updatedAt || data.time || "just now",
           }
           : r,
       ),
     }));
-    toast(`Room ${roomNum} is ${status}`, "ai", "Live from Mews PMS");
+    if (eventType === "pms:room_updated") {
+      toast(`Room ${roomNum} is ${status}`, "ai", "Live from Mews PMS");
+    }
   } else if (eventType === "pms:reservation_updated" && data?.roomNumber) {
     const roomNum = String(data.roomNumber);
+
     set((s) => ({
       rooms: s.rooms.map((r) =>
         r.number === roomNum
@@ -1416,10 +1420,32 @@ export async function syncPmsWithBackend() {
       if (issues && Array.isArray(issues)) set(() => ({ issues }));
       if (convs && Array.isArray(convs)) set(() => ({ conversations: convs }));
 
+      const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      set((s) => ({
+        integrations: {
+          ...s.integrations,
+          pms: {
+            ...s.integrations.pms,
+            connected: true,
+            lastSync: nowTime,
+          },
+        },
+        onboarding: {
+          ...s.onboarding,
+          pms: {
+            ...s.onboarding.pms,
+            state: "connected",
+            lastSync: nowTime,
+          },
+          done: { ...s.onboarding.done, pms: true },
+        },
+      }));
+
       const countRooms = res.synced?.rooms ?? 0;
       const countRes = res.synced?.reservations ?? 0;
       toast("Synced with Mews", "good", `${countRooms} rooms & ${countRes} reservations updated`);
       return res;
+
     } else {
       toast("PMS sync failed", "urgent", res?.message || "Failed to sync data from Mews API");
       return null;
@@ -1745,11 +1771,12 @@ export async function initBackendSync() {
     const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
     const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
     const freshProfile = hotelProfileData || onboardingData?.hotelProfile || onboardingData?.hotel;
-    if (freshProfile && !isFreshSetup) {
+    if (freshProfile && (!isFreshSetup || onboardingData?.complete)) {
       set((s) => ({
         hotelProfile: { ...s.hotelProfile, ...freshProfile },
       }));
     }
+
 
     if (rooms && Array.isArray(rooms)) {
       set(() => ({ rooms }));
@@ -1840,8 +1867,8 @@ export async function initBackendSync() {
     if (onboardingData) {
       const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
       const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
-      if (!isFreshSetup) {
-        const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
+      if (!isFreshSetup || onboardingData.complete) {
+        const isPmsActuallyConnected = pmsStatusData?.status === "connected" || pmsStatusData?.connected === true || Boolean(onboardingData.done?.pms);
         const emailDone = Boolean(onboardingData.done?.email);
         const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
         const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);
@@ -1858,7 +1885,8 @@ export async function initBackendSync() {
               state: isPmsActuallyConnected ? "connected" : "not-started",
               provider: isPmsActuallyConnected ? (pmsStatusData?.provider || "Mews") : null,
               propertyId: pmsStatusData?.propertyId || s.onboarding.pms.propertyId,
-              lastSync: pmsStatusData?.lastSyncAt || (isPmsActuallyConnected ? "Live" : null),
+              propertyName: pmsStatusData?.propertyName || freshProfile?.name || s.hotelProfile.name,
+              lastSync: pmsStatusData?.lastSyncAt ? new Date(pmsStatusData.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (isPmsActuallyConnected ? "Live" : null),
             },
             email: {
               ...s.onboarding.email,
@@ -1880,13 +1908,14 @@ export async function initBackendSync() {
             pms: {
               provider: pmsStatusData?.provider || "Mews",
               connected: isPmsActuallyConnected,
-              lastSync: pmsStatusData?.lastSyncAt ? "Live" : isPmsActuallyConnected ? "Live" : "Not connected",
+              lastSync: pmsStatusData?.lastSyncAt ? new Date(pmsStatusData.lastSyncAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (isPmsActuallyConnected ? "Live" : "Not connected"),
             },
             email: {
               provider: "google",
               account: (onboardingData.hotelProfile?.email || s.hotelProfile.email || ""),
               connected: emailDone,
             },
+
             whatsapp: {
               connected: waConnected,
               number: onboardingData.hotelProfile?.whatsappNumber || s.hotelProfile.whatsappNumber || "",

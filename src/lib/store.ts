@@ -1768,12 +1768,8 @@ export async function initBackendSync() {
       api.getHotelProfile().catch(() => null),
     ]);
 
-<<<<<<< HEAD
-    const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null && !onboardingData?.complete;
-=======
     const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
     const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
->>>>>>> 8a3fd0a54ad9c2057c8235bf691f10ad9245314b
     const freshProfile = hotelProfileData || onboardingData?.hotelProfile || onboardingData?.hotel;
     if (freshProfile && (!isFreshSetup || onboardingData?.complete)) {
       set((s) => ({
@@ -1869,16 +1865,10 @@ export async function initBackendSync() {
       }
     }
     if (onboardingData) {
-<<<<<<< HEAD
-      const isFreshSetup = !store.state.onboarding.complete && store.state.onboarding.startedAt !== null && !onboardingData.complete;
-      if (!isFreshSetup || onboardingData.complete) {
-        const isPmsActuallyConnected = pmsStatusData?.status === "connected" || pmsStatusData?.connected === true || Boolean(onboardingData.done?.pms);
-=======
       const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
       const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
-      if (!isFreshSetup) {
-        const isPmsActuallyConnected = pmsStatusData?.connected ?? Boolean(onboardingData.done?.pms);
->>>>>>> 8a3fd0a54ad9c2057c8235bf691f10ad9245314b
+      if (!isFreshSetup || onboardingData.complete) {
+        const isPmsActuallyConnected = pmsStatusData?.status === "connected" || pmsStatusData?.connected === true || Boolean(onboardingData.done?.pms);
         const emailDone = Boolean(onboardingData.done?.email);
         const waGuestDone = Boolean(onboardingData.done?.['wa-guest']);
         const waInternalDone = Boolean(onboardingData.done?.['wa-internal']);

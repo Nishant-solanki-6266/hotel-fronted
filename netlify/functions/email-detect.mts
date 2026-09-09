@@ -140,6 +140,56 @@ async function withTimeout<T>(work: Promise<T>, fallback: T): Promise<T> {
   }
 }
 
+async function resolveMxDoH(domain: string): Promise<{ priority: number; exchange: string }[]> {
+  const controller = new AbortController();
+  const abort = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const urls = [
+      `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=MX`,
+      `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=MX`,
+    ];
+    for (const url of urls) {
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: { accept: "application/dns-json" },
+          signal: controller.signal,
+        });
+        if (!res.ok) continue;
+        const data = (await res.json()) as { Answer?: { type: number; data: string }[] };
+        if (data && Array.isArray(data.Answer)) {
+          const mxAnswers = data.Answer.filter((a) => a.type === 15 && typeof a.data === "string");
+          if (mxAnswers.length > 0) {
+            return mxAnswers.map((a) => {
+              const parts = a.data.trim().split(/\s+/);
+              const priority = parts.length >= 2 ? Number(parts[0]) || 10 : 10;
+              const exchange = (parts.length >= 2 ? parts.slice(1).join(" ") : parts[0]).replace(/\.$/, "");
+              return { priority, exchange };
+            });
+          }
+        }
+      } catch (_) {
+        // Continue to next DoH provider
+      }
+    }
+    return [];
+  } catch (_) {
+    return [];
+  } finally {
+    clearTimeout(abort);
+  }
+}
+
+async function resolveMxSafe(domain: string): Promise<{ priority: number; exchange: string }[]> {
+  // 1. Primary: Native Node.js DNS resolver
+  let records = await withTimeout(resolveMx(domain), []);
+  // 2. Fallback: Standard DNS-over-HTTPS (DoH) if native DNS query was refused or empty
+  if (!records || records.length === 0) {
+    records = await resolveMxDoH(domain);
+  }
+  return records || [];
+}
+
 function normaliseDomain(input: string): string | null {
   const raw = input.trim().toLowerCase();
   const domain = raw.includes("@") ? raw.slice(raw.lastIndexOf("@") + 1) : raw;
@@ -237,7 +287,7 @@ export default async (request: Request) => {
     return new Response(JSON.stringify({ error: "Provide ?email= or ?domain=" }), { status: 400, headers });
   }
 
-  const records = await withTimeout(resolveMx(domain), []);
+  const records = await resolveMxSafe(domain);
   const mx = records.sort((a, b) => a.priority - b.priority).map((r) => r.exchange.toLowerCase().replace(/\.$/, ""));
 
   const known = matchProvider(mx, domain);

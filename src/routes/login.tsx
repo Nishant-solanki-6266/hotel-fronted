@@ -80,11 +80,33 @@ function Login() {
     }
   };
 
-  // First login for a hotel that has not been set up yet — clears the seeded connections
-  // and opens the onboarding wizard as the manager.
+  // First login for a hotel that has not been set up yet — creates a clean isolated
+  // tenant and opens the onboarding wizard as the fresh manager.
   const firstLogin = async () => {
-    const manager = staff.find((u) => u.role === "manager") ?? staff[0];
     setBusy(true);
+    try {
+      const suffix = Math.random().toString(36).substring(2, 7);
+      const res = await api.registerHotel({
+        hotelName: "New Hotel",
+        managerName: "General Manager",
+        email: `manager_${suffix}@hotel.internal`,
+        password: "demo-access",
+      });
+
+      if (res && res.token && res.user) {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("token", res.token);
+        }
+        startOnboarding();
+        await signIn(res.user.id, res.user);
+        setTimeout(() => navigate({ to: "/onboarding" }), 150);
+        return;
+      }
+    } catch (err) {
+      console.warn("Isolated hotel setup fallback:", err);
+    }
+
+    const manager = staff.find((u) => u.role === "manager") ?? staff[0];
     startOnboarding();
     await signIn(manager.id);
     setTimeout(() => navigate({ to: "/onboarding" }), 150);

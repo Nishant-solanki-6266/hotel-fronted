@@ -162,6 +162,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ provider, propertyId }),
     }),
+  disconnectPms: () =>
+    request<any>('/pms/disconnect', {
+      method: 'POST',
+    }),
   getPmsStatus: () => request<any>('/pms/status'),
   syncPms: () =>
     request<any>('/pms/sync', {

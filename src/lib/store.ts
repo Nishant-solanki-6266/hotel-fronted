@@ -1268,6 +1268,10 @@ export function startOnboarding() {
       legalName: "",
       stars: 4,
       rooms: 0,
+<<<<<<< HEAD
+=======
+      languages: ["Dutch", "French", "English", "German"],
+>>>>>>> 754282934a7643bc12ddbedd6866b659b6f31633
       address: "",
       postcode: "",
       city: "",
@@ -1323,6 +1327,7 @@ export function disconnectPms() {
       },
     },
   }));
+  api.disconnectPms().catch(() => {});
 }
 
 export function markOnboardingStep(step: OnboardingStepKey, done = true) {
@@ -1560,7 +1565,11 @@ export function connectWhatsAppNumber(
   const wabaId = metaData?.wabaId || fallbackIds.wabaId;
   const phoneNumberId = metaData?.phoneNumberId || fallbackIds.phoneNumberId;
   const displayPhoneNumber = metaData?.displayPhoneNumber || phone || fallbackIds.displayPhoneNumber;
+<<<<<<< HEAD
   const currentHotelId = (store.state.hotelProfile as any)?.id || "hotel";
+=======
+  const currentHotelId = (store.state.hotelProfile as any)?.id || "hotel-mercier";
+>>>>>>> 754282934a7643bc12ddbedd6866b659b6f31633
 
   const connection: WaConnection = {
     state: "connected",

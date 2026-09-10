@@ -50,9 +50,13 @@ export function OnboardingWizard() {
   const profile = useApp((s) => s.hotelProfile);
   const aiMode = useApp((s) => s.aiMode);
 
-  const [stage, setStage] = useState<"welcome" | "checklist" | "finish">(onboarding.waTopology ? "checklist" : "welcome");
+  const hasOauthReturn = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("oauth_status");
+
+  const [stage, setStage] = useState<"welcome" | "checklist" | "finish">(
+    hasOauthReturn || onboarding.waTopology ? "checklist" : "welcome"
+  );
   const [topology, setTopology] = useState<WaTopology>(onboarding.waTopology ?? "separate");
-  const [open, setOpen] = useState<OnboardingStepKey | null>(null);
+  const [open, setOpen] = useState<OnboardingStepKey | null>(hasOauthReturn ? "email" : null);
   const [profileDraft, setProfileDraft] = useState<HotelProfile | null>(null);
 
   const steps = stepsForTopology(onboarding.waTopology);

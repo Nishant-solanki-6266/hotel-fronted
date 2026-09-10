@@ -420,11 +420,13 @@ function UsersPanel() {
                   onChange={(e) => setRole(e.target.value as Role)}
                   className="mt-1 w-full rounded-[9px] border border-line bg-surface px-2.5 py-2 text-[13px] outline-none focus:border-pine-400"
                 >
-                  {(Object.keys(roleLabel) as Role[]).map((r) => (
-                    <option key={r} value={r}>
-                      {roleLabel[r]}
-                    </option>
-                  ))}
+                  {(Object.keys(roleLabel) as Role[])
+                    .filter((r) => r !== "manager")
+                    .map((r) => (
+                      <option key={r} value={r}>
+                        {roleLabel[r]}
+                      </option>
+                    ))}
                 </select>
               </label>
             </div>

@@ -1268,10 +1268,7 @@ export function startOnboarding() {
       legalName: "",
       stars: 4,
       rooms: 0,
-<<<<<<< HEAD
-=======
       languages: ["Dutch", "French", "English", "German"],
->>>>>>> 754282934a7643bc12ddbedd6866b659b6f31633
       address: "",
       postcode: "",
       city: "",
@@ -1286,7 +1283,6 @@ export function startOnboarding() {
       checkIn: "15:00",
       checkOut: "11:00",
       vatNumber: "",
-      languages: ["en"],
       description: "",
     },
     onboarding: freshOnboarding(),
@@ -1565,11 +1561,7 @@ export function connectWhatsAppNumber(
   const wabaId = metaData?.wabaId || fallbackIds.wabaId;
   const phoneNumberId = metaData?.phoneNumberId || fallbackIds.phoneNumberId;
   const displayPhoneNumber = metaData?.displayPhoneNumber || phone || fallbackIds.displayPhoneNumber;
-<<<<<<< HEAD
-  const currentHotelId = (store.state.hotelProfile as any)?.id || "hotel";
-=======
   const currentHotelId = (store.state.hotelProfile as any)?.id || "hotel-mercier";
->>>>>>> 754282934a7643bc12ddbedd6866b659b6f31633
 
   const connection: WaConnection = {
     state: "connected",
@@ -1954,12 +1946,16 @@ export async function initBackendSync() {
 if (typeof window !== "undefined") {
   initBackendSync();
 
-  // Multi-device live sync loop (every 8 seconds)
+  // Multi-device live sync loop (every 12 seconds on active manager dashboards)
   setInterval(async () => {
     try {
       const token = window.localStorage.getItem("token");
       const sessionUserId = window.localStorage.getItem("hotelogx.session.v1");
       if (!token && !sessionUserId) return;
+
+      const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
+      const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
+      if (isFreshSetup) return;
 
       const [rooms, tasks, issues, convs, waThreads, users, profile, upsellsData] = await Promise.all([
         api.getRooms().catch(() => null),
@@ -1971,9 +1967,7 @@ if (typeof window !== "undefined") {
         api.getHotelProfile().catch(() => null),
         api.getUpsells().catch(() => null),
       ]);
-      const isOnboardingPage = typeof window !== "undefined" && window.location.pathname.startsWith("/onboarding");
-      const isFreshSetup = isOnboardingPage && !store.state.onboarding.complete;
-      if (profile && !isFreshSetup) {
+      if (profile) {
         set((s) => ({ hotelProfile: { ...s.hotelProfile, ...profile } }));
       }
       if (rooms && Array.isArray(rooms)) {

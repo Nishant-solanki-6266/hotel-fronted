@@ -93,7 +93,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}, isRetry =
       if (res.status !== 401) {
         console.warn(`API request to ${endpoint} returned status ${res.status}`);
       }
-      return null;
+      try {
+        const errorJson = await res.json();
+        return errorJson as T;
+      } catch {
+        return null;
+      }
     }
 
     const json = await res.json();

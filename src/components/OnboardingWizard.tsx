@@ -11,9 +11,9 @@ import { OnboardingProfileStep } from "./OnboardingProfileStep";
 import { OnboardingUsersStep } from "./OnboardingUsersStep";
 import { OnboardingWhatsAppStep } from "./OnboardingWhatsAppStep";
 import { onboardingSteps, stepsForTopology, waTopologyOptions } from "@/lib/onboarding";
-import { completeOnboarding, markOnboardingStep, setWaTopology, updateHotelProfile, useApp } from "@/lib/store";
-import { roleHome, useCurrentUser } from "@/lib/session";
-import type { HotelProfile, OnboardingStepKey, WaTopology } from "@/lib/types";
+import { completeOnboarding, markOnboardingStep, setWaTopology, store, updateHotelProfile, useApp } from "@/lib/store";
+import { roleHome, signIn, useCurrentUser } from "@/lib/session";
+import type { HotelProfile, OnboardingStepKey, Role, StaffUser, WaTopology } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 function StepBody({
@@ -187,9 +187,15 @@ export function OnboardingWizard() {
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
             <Button
               icon={LayoutDashboard}
-              onClick={() => {
+              onClick={async () => {
                 completeOnboarding();
-                navigate({ to: user ? roleHome[user.role] : "/manager" });
+                const invitedUsers = store.state.users as StaffUser[];
+                const newManager = invitedUsers.find((u: StaffUser) => u.role === "manager") || invitedUsers[invitedUsers.length - 1];
+                if (newManager) {
+                  await signIn(newManager.id, newManager);
+                }
+                const activeUser = newManager || user;
+                navigate({ to: activeUser ? roleHome[activeUser.role as Role] : "/manager" });
               }}
             >
               Open the dashboard

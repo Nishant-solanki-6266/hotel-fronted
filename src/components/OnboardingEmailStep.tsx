@@ -65,7 +65,7 @@ export function OnboardingEmailStep() {
     if (oauthStatus === "success") {
       const emailAccount = urlParams.get("email") || address;
       toast("Google Mailbox Connected", "good", `${emailAccount} · Google Workspace`);
-      connectEmail("oauth");
+      connectEmail("oauth", null, undefined, emailAccount);
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
     } else if (oauthStatus === "error") {

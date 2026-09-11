@@ -75,9 +75,10 @@ export async function signIn(userId: string, customUser?: StaffUser) {
   }
 
   const demoFound = staff.find((u) => u.id === userId);
-  if (demoFound && !customUser) {
+  const emailToLogin = customUser?.email || demoFound?.email;
+  if (emailToLogin) {
     try {
-      const res = await api.login({ email: demoFound.email, userId: demoFound.id });
+      const res = await api.login({ email: emailToLogin, userId });
       if (res?.token && typeof window !== "undefined") {
         window.localStorage.setItem("token", res.token);
       }

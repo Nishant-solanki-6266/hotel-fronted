@@ -1495,38 +1495,42 @@ export async function runEmailDetection(address: string) {
   return detection;
 }
 
-export async function connectEmail(method: EmailMethod, settings: EmailServerSettings | null = null, password?: string) {
+export async function connectEmail(method: EmailMethod, settings: EmailServerSettings | null = null, password?: string, overrideAddress?: string) {
   const detection = store.state.onboarding.email.detection;
-  const address = store.state.onboarding.email.address;
+  const address = overrideAddress || store.state.onboarding.email.address;
   const provider: "google" | "microsoft" | "other" =
-    detection?.provider === "google" ? "google" : detection?.provider === "microsoft" ? "microsoft" : "other";
+    method === "oauth" ? "google" : detection?.provider === "google" ? "google" : detection?.provider === "microsoft" ? "microsoft" : "other";
 
-  const host = settings?.imapHost;
-  const port = settings?.imapPort;
+  if (method !== "oauth") {
+    const host = settings?.imapHost;
+    const port = settings?.imapPort;
 
-  // Run live backend connection handshake
-  try {
-    const testRes = await api.testEmailConnection({
-      email: address,
-      password,
-      host,
-      port,
-      method,
-    });
-    if (testRes && testRes.success === false) {
-      failEmailConnection(testRes.message || "Failed to connect to mail server");
-      return;
+    // Run live backend connection handshake for IMAP / credentials
+    try {
+      const testRes = await api.testEmailConnection({
+        email: address,
+        password,
+        host,
+        port,
+        method,
+      });
+      if (testRes && testRes.success === false) {
+        failEmailConnection(testRes.message || "Failed to connect to mail server");
+        return;
+      }
+    } catch (err: any) {
+      console.warn("[Email Connection Test]", err?.message);
     }
-  } catch (err: any) {
-    // If testing endpoint returns an error, fail cleanly
-    console.warn("[Email Connection Test]", err?.message);
   }
+
+  const finalAccount = address || store.state.onboarding.email.address;
 
   set((s) => ({
     onboarding: {
       ...s.onboarding,
       email: {
         ...s.onboarding.email,
+        address: finalAccount,
         state: "connected",
         method,
         settings: settings ?? s.onboarding.email.settings,
@@ -1536,11 +1540,10 @@ export async function connectEmail(method: EmailMethod, settings: EmailServerSet
       },
       done: { ...s.onboarding.done, email: true },
     },
-    integrations: { ...s.integrations, email: { provider, account: address, connected: true } },
+    integrations: { ...s.integrations, email: { provider, account: finalAccount, connected: true } },
   }));
 
-  api.saveOnboardingStep("email", { method, address });
-  toast("Mailbox connected", "good", `${address} · ${detection?.providerName ?? "manual setup"}`);
+  api.saveOnboardingStep("email", { method, address: finalAccount });
 }
 
 export function failEmailConnection(message: string) {

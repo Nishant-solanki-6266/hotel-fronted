@@ -129,7 +129,7 @@ function ManagerSettings() {
 /* --------------------------------------------------------------- profile -- */
 
 type ProfileTextKey = {
-  [K in keyof HotelProfile]: HotelProfile[K] extends string ? K : never;
+  [K in keyof HotelProfile]-?: NonNullable<HotelProfile[K]> extends string ? (K extends "id" ? never : K) : never;
 }[keyof HotelProfile];
 
 type TextField = { key: ProfileTextKey; label: string; mono?: boolean };

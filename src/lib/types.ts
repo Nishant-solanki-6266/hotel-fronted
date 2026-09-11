@@ -236,6 +236,7 @@ export interface WaThread {
 }
 
 export interface HotelProfile {
+  id?: string;
   name: string;
   legalName: string;
   stars: number;

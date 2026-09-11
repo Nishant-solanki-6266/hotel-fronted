@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button, Card, Eyebrow, SectionTitle } from "./ui";
 
 type ProfileTextKey = {
-  [K in keyof HotelProfile]: HotelProfile[K] extends string ? K : never;
+  [K in keyof HotelProfile]-?: NonNullable<HotelProfile[K]> extends string ? (K extends "id" ? never : K) : never;
 }[keyof HotelProfile];
 
 const fields: { key: ProfileTextKey; label: string; mono?: boolean; placeholder?: string }[] = [

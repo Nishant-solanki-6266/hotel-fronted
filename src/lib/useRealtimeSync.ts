@@ -19,7 +19,8 @@ export function useRealtimeSync(hotelId: string = "hotel-mercier") {
     function connect() {
       if (!isMounted) return;
 
-      const url = `${API_BASE_URL}/realtime/events?hotelId=${encodeURIComponent(hotelId)}`;
+      const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+      const url = `${API_BASE_URL}/realtime/events?hotelId=${encodeURIComponent(hotelId)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
       const es = new EventSource(url);
       eventSourceRef.current = es;
 

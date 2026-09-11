@@ -196,9 +196,17 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
   const suggested = connectionType === "guest" ? profile.whatsappNumber : "+32 3 227 41 09";
 
   const launchWhatsAppSignup = () => {
+    const metaAppId = import.meta.env.VITE_META_APP_ID;
     const metaConfigId = import.meta.env.VITE_META_CONFIG_ID;
+    const currentHotelId = profile.id || "hotel-mercier";
 
-    if (typeof window !== "undefined" && window.FB && metaConfigId) {
+    if (!metaAppId || !metaConfigId) {
+      toast("Meta App Credentials Missing", "urgent", "Set VITE_META_APP_ID and VITE_META_CONFIG_ID in .env");
+      setSignup(true);
+      return;
+    }
+
+    if (typeof window !== "undefined" && window.FB) {
       let capturedWabaId = "";
       let capturedPhoneId = "";
       let capturedPhone = suggested;
@@ -227,6 +235,8 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
               phoneNumberId: capturedPhoneId,
               displayPhoneNumber: capturedPhone,
             });
+          } else if (response?.status === "not_authorized" || response?.status === "unknown") {
+            toast("Meta Signup Error", "urgent", "Ensure your Meta app is published or user has developer role");
           } else {
             toast("Meta signup cancelled", "urgent", "You can retry or use simulator mode");
           }
@@ -238,14 +248,27 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
           extras: {
             feature: "whatsapp_embedded_signup",
             version: 2,
+            sessionInfoVersion: 2,
           },
         }
       );
       return;
     }
 
-    // Fallback to built-in interactive simulator
-    setSignup(true);
+    // Direct OAuth Fallback if JS SDK is unavailable or blocked
+    const backendApiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+    const callbackUrl = `${backendApiBase}/whatsapp/oauth/callback`;
+    const statePayload = btoa(JSON.stringify({ hotelId: currentHotelId, targetType: connectionType }));
+    
+    const directOAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(
+      metaAppId
+    )}&config_id=${encodeURIComponent(
+      metaConfigId
+    )}&redirect_uri=${encodeURIComponent(
+      callbackUrl
+    )}&response_type=code&state=${encodeURIComponent(statePayload)}&scope=whatsapp_business_management,whatsapp_business_messaging`;
+
+    window.open(directOAuthUrl, "MetaWhatsAppOAuth", "width=600,height=700,scrollbars=yes");
   };
 
   if (connection.state === "connected") {

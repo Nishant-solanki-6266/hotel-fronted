@@ -641,6 +641,18 @@ export async function setRoomStatus(
  * Apply live updates from Mews PMS Webhook stream without requiring full page refresh
  */
 export function applyPmsLiveUpdate(eventType: string, data: any) {
+  if (eventType === "pms:synced") {
+    api.getRooms().then((rooms) => {
+      if (rooms && Array.isArray(rooms)) set(() => ({ rooms }));
+    }).catch(() => {});
+    api.getTasks().then((tasks) => {
+      if (tasks && Array.isArray(tasks)) set(() => ({ tasks }));
+    }).catch(() => {});
+    const countRooms = data?.synced?.rooms ?? 0;
+    const countRes = data?.synced?.reservations ?? 0;
+    toast("PMS Data Synchronized", "good", `${countRooms} rooms & ${countRes} reservations updated`);
+    return;
+  }
   if ((eventType === "pms:room_updated" || eventType === "room:status_changed") && (data?.roomNumber || data?.number)) {
     const roomNum = String(data.roomNumber || data.number);
     const status = data.status as RoomStatus;

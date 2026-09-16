@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
-import { ArrowRight, Building2, Check, Loader2, MessageCircle, Phone, ShieldCheck, X, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Building2, Check, Loader2, MessageCircle, Phone, ShieldCheck, X } from "lucide-react";
 import { waLabel } from "@/lib/onboarding";
 import { connectWhatsAppNumber, testWhatsApp, toast, useApp } from "@/lib/store";
-import { api } from "@/lib/api";
 import type { WaConnectionType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button, Card, Eyebrow, SectionTitle } from "./ui";
@@ -194,36 +193,7 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
   const [signup, setSignup] = useState(false);
   const [usage, setUsage] = useState<"guest" | "internal" | "both">(connectionType === "guest" ? "guest" : "internal");
 
-  const configuredPhone = import.meta.env.VITE_WHATSAPP_NUMBER || profile.whatsappNumber || "+31 6 84378005";
-  const configuredWabaId = import.meta.env.VITE_WABA_ID || "1024270903381875";
-  const configuredPhoneId = "1153274627873433";
-
-  const suggested = connectionType === "guest" ? configuredPhone : "+32 3 227 41 09";
-
-  const connectConfiguredClientNumber = () => {
-    connectWhatsAppNumber(connectionType, configuredPhone, {
-      wabaId: configuredWabaId,
-      phoneNumberId: configuredPhoneId,
-      displayPhoneNumber: configuredPhone,
-    });
-    toast("WhatsApp Connected", "good", `Connected verified client number: ${configuredPhone}`);
-  };
-
-  useEffect(() => {
-    // If backend or env already has verified client WhatsApp credentials configured, automatically link them
-    if (connection.state !== "connected") {
-      api.getOnboarding().then((res: any) => {
-        if (res?.done?.["wa-guest"] || res?.hotelProfile?.whatsappNumber) {
-          const phone = res?.hotelProfile?.whatsappNumber || configuredPhone;
-          connectWhatsAppNumber(connectionType, phone, {
-            wabaId: configuredWabaId,
-            phoneNumberId: configuredPhoneId,
-            displayPhoneNumber: phone,
-          });
-        }
-      }).catch(() => {});
-    }
-  }, [connection.state, connectionType]);
+  const suggested = connectionType === "guest" ? profile.whatsappNumber : "+32 3 227 41 09";
 
   const launchWhatsAppSignup = () => {
     const metaAppId = import.meta.env.VITE_META_APP_ID;
@@ -265,9 +235,10 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
               phoneNumberId: capturedPhoneId,
               displayPhoneNumber: capturedPhone,
             });
+          } else if (response?.status === "not_authorized" || response?.status === "unknown") {
+            toast("Meta Signup Error", "urgent", "Ensure your Meta app is published or user has developer role");
           } else {
-            toast("Meta Popup Blocked/Unavailable", "ai", `Auto-connecting configured client credentials (${configuredPhone})`);
-            connectConfiguredClientNumber();
+            toast("Meta signup cancelled", "urgent", "You can retry or use simulator mode");
           }
         },
         {
@@ -390,46 +361,14 @@ export function OnboardingWhatsAppStep({ connectionType }: { connectionType: WaC
           })}
         </div>
 
-        {/* Client Verified Credentials Card */}
-        <div className="mt-3.5 rounded-[12px] border border-pine-200 bg-pine-50/50 p-3.5 text-[12px]">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1.5 font-medium text-pine-900">
-              <Sparkles className="size-3.5 text-pine-700" /> Client WhatsApp Cloud API Ready
-            </span>
-            <span className="rounded-full bg-pine-100 px-2 py-0.5 text-[10.5px] font-semibold text-pine-800">
-              Verified
-            </span>
-          </div>
-          <p className="mt-1 font-mono text-[11.5px] text-ink-3">
-            Number: <strong className="text-ink">{configuredPhone}</strong> · WABA: <span className="text-ink">{configuredWabaId}</span>
-          </p>
-        </div>
-
-        <div className="mt-3.5 flex flex-col gap-2">
-          <Button
-            size="md"
-            variant="primary"
-            icon={Check}
-            onClick={connectConfiguredClientNumber}
-            className="w-full justify-center bg-pine-700 text-white hover:bg-pine-800"
-          >
-            Connect Client Number ({configuredPhone})
-          </Button>
-
-          <Button
-            size="sm"
-            variant="outline"
-            icon={MessageCircle}
-            onClick={launchWhatsAppSignup}
-            className="w-full justify-center text-xs text-ink-3"
-          >
-            Or Try Facebook Popup (Embedded Signup)
-          </Button>
-        </div>
+        <Button className="mt-3.5" icon={MessageCircle} onClick={launchWhatsAppSignup}>
+          Connect WhatsApp
+        </Button>
 
         <p className="mt-2.5 flex items-start gap-1.5 border-t border-line-soft pt-3 text-[11.5px] leading-snug text-ink-4">
           <ShieldCheck className="mt-px size-3.5 shrink-0 text-pine-600" />
-          Client credentials from .env and Meta Cloud API are pre-configured. Click "Connect Client Number" to activate instantly without Facebook popup restrictions.
+          Clicking through opens Meta's own signup. You pick your Business Portfolio, your WhatsApp Business Account and the
+          number — then come back here and see whether it works.
         </p>
       </Card>
 
